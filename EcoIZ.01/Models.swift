@@ -1,9 +1,9 @@
 import Foundation
 
 enum EcoLevel: String, CaseIterable {
-    case newHero = "New Hero"
-    case ecoWarrior = "Eco Warrior"
-    case planetGuardian = "Planet Guardian"
+    case newHero = "Эко-новичок"
+    case ecoWarrior = "Эко-воин"
+    case planetGuardian = "Хранитель Земли"
 
     static func from(points: Int) -> EcoLevel {
         switch points {
