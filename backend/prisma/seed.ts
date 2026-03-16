@@ -49,6 +49,7 @@ async function main() {
         { title: "Полная загрузка стирки", points: 20, waterValue: 40 },
         { title: "Устранил утечку", points: 30, waterValue: 60 },
         { title: "Установил аэратор", points: 25, waterValue: 35 },
+        { title: "Своя активность", points: 10, waterValue: 5, isCustom: true },
       ],
     },
     {
@@ -61,6 +62,7 @@ async function main() {
         { title: "Многоразовая сумка", points: 15, recycledValue: 1 },
         { title: "Многоразовая бутылка", points: 20, recycledValue: 1 },
         { title: "Сдал пластик", points: 25, recycledValue: 3 },
+        { title: "Своя активность", points: 10, recycledValue: 1, isCustom: true },
       ],
     },
     {
