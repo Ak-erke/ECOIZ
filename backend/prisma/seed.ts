@@ -20,6 +20,14 @@ type SeedCategory = {
   habits: SeedHabit[];
 };
 
+type SeedAchievement = {
+  title: string;
+  description: string;
+  icon: string;
+  targetValue: number;
+  rewardPoints: number;
+};
+
 async function main() {
   const categories: SeedCategory[] = [
     {
@@ -92,6 +100,114 @@ async function main() {
     },
   ];
 
+  const achievements: SeedAchievement[] = [
+    {
+      title: "Эко-новичок",
+      description: "Использовать многоразовую бутылку 10 раз",
+      icon: "badge_1",
+      targetValue: 10,
+      rewardPoints: 50,
+    },
+    {
+      title: "Неделя силы",
+      description: "7 раз пройти пешком вместо такси",
+      icon: "badge_2",
+      targetValue: 7,
+      rewardPoints: 70,
+    },
+    {
+      title: "Экономист",
+      description: "30 дней подряд отмечать экономию электроэнергии",
+      icon: "badge_3",
+      targetValue: 30,
+      rewardPoints: 150,
+    },
+    {
+      title: "Мастер сортировки",
+      description: "Отсортировать мусор 40 раз",
+      icon: "badge_4",
+      targetValue: 40,
+      rewardPoints: 120,
+    },
+    {
+      title: "Зеленый наставник",
+      description: "50 дней сокращать время душа на 2-3 минуты",
+      icon: "badge_5",
+      targetValue: 50,
+      rewardPoints: 200,
+    },
+    {
+      title: "Друг природы",
+      description: "Подписаться на 10 пользователей",
+      icon: "badge_follow",
+      targetValue: 10,
+      rewardPoints: 60,
+    },
+    {
+      title: "Вдохновитель",
+      description: "Опубликовать 5 постов",
+      icon: "badge_post",
+      targetValue: 5,
+      rewardPoints: 80,
+    },
+    {
+      title: "Эко-комментатор",
+      description: "Оставить 20 комментариев",
+      icon: "badge_comment",
+      targetValue: 20,
+      rewardPoints: 60,
+    },
+    {
+      title: "Любимец сообщества",
+      description: "Получить 25 лайков на постах",
+      icon: "badge_like",
+      targetValue: 25,
+      rewardPoints: 100,
+    },
+    {
+      title: "Стабильный шаг",
+      description: "Выполнять активности 7 дней подряд",
+      icon: "badge_streak_7",
+      targetValue: 7,
+      rewardPoints: 70,
+    },
+    {
+      title: "Зеленая серия",
+      description: "Выполнять активности 30 дней подряд",
+      icon: "badge_streak_30",
+      targetValue: 30,
+      rewardPoints: 200,
+    },
+    {
+      title: "Бережливый пользователь",
+      description: "Сэкономить 500 литров воды",
+      icon: "badge_water",
+      targetValue: 500,
+      rewardPoints: 100,
+    },
+    {
+      title: "Энерго-герой",
+      description: "Сэкономить 100 кВт·ч энергии",
+      icon: "badge_energy",
+      targetValue: 100,
+      rewardPoints: 120,
+    },
+    {
+      title: "Спасатель климата",
+      description: "Сократить 100 кг CO2",
+      icon: "badge_co2",
+      targetValue: 100,
+      rewardPoints: 150,
+    },
+    {
+      title: "Переработчик",
+      description: "Переработать 50 единиц отходов",
+      icon: "badge_recycle",
+      targetValue: 50,
+      rewardPoints: 90,
+    },
+  ];
+
   const createdCategories = [] as { id: string; name: string }[];
   for (const cat of categories) {
     const category = await prisma.ecoCategory.upsert({
@@ -137,6 +253,35 @@ async function main() {
         });
       }
     }
+  }
+
+  for (const achievement of achievements) {
+    const existingAchievement = await prisma.achievement.findFirst({
+      where: { title: achievement.title },
+    });
+
+    if (existingAchievement) {
+      await prisma.achievement.update({
+        where: { id: existingAchievement.id },
+        data: {
+          description: achievement.description,
+          icon: achievement.icon,
+          targetValue: achievement.targetValue,
+          rewardPoints: achievement.rewardPoints,
+        },
+      });
+      continue;
+    }
+
+    await prisma.achievement.create({
+      data: {
+        title: achievement.title,
+        description: achievement.description,
+        icon: achievement.icon,
+        targetValue: achievement.targetValue,
+        rewardPoints: achievement.rewardPoints,
+      },
+    });
   }
 
   console.log("Seeding complete.");
