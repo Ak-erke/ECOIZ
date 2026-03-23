@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  EcoIZ.01
+//  EcoIz-IOS
 //
 //  Created by Ақерке Амиртай on 24.02.2026.
 //

@@ -1,13 +1,13 @@
 //
-//  EcoIZ_01UITestsLaunchTests.swift
-//  EcoIZ.01UITests
+//  EcoIzIOSUITestsLaunchTests.swift
+//  EcoIz-IOSUITests
 //
 //  Created by Ақерке Амиртай on 24.02.2026.
 //
 
 import XCTest
 
-final class EcoIZ_01UITestsLaunchTests: XCTestCase {
+final class EcoIzIOSUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

@@ -12,37 +12,37 @@
 			containerPortal = F61165D22F4CFB6A00952235 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = F61165D92F4CFB6A00952235;
-			remoteInfo = EcoIZ.01;
+			remoteInfo = "EcoIz-IOS";
 		};
 		F61165F22F4CFB6B00952235 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F61165D22F4CFB6A00952235 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = F61165D92F4CFB6A00952235;
-			remoteInfo = EcoIZ.01;
+			remoteInfo = "EcoIz-IOS";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F61165DA2F4CFB6A00952235 /* EcoIZ.01.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EcoIZ.01.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F61165E72F4CFB6B00952235 /* EcoIZ.01Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EcoIZ.01Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		F61165F12F4CFB6B00952235 /* EcoIZ.01UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EcoIZ.01UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F61165DA2F4CFB6A00952235 /* EcoIz-IOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "EcoIz-IOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F61165E72F4CFB6B00952235 /* EcoIz-IOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "EcoIz-IOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F61165F12F4CFB6B00952235 /* EcoIz-IOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "EcoIz-IOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F61165DC2F4CFB6A00952235 /* EcoIZ.01 */ = {
+		F61165DC2F4CFB6A00952235 /* EcoIz-IOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = EcoIZ.01;
+			path = "EcoIz-IOS";
 			sourceTree = "<group>";
 		};
-		F61165EA2F4CFB6B00952235 /* EcoIZ.01Tests */ = {
+		F61165EA2F4CFB6B00952235 /* EcoIz-IOSTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = EcoIZ.01Tests;
+			path = "EcoIz-IOSTests";
 			sourceTree = "<group>";
 		};
-		F61165F42F4CFB6B00952235 /* EcoIZ.01UITests */ = {
+		F61165F42F4CFB6B00952235 /* EcoIz-IOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = EcoIZ.01UITests;
+			path = "EcoIz-IOSUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,9 +75,9 @@
 		F61165D12F4CFB6A00952235 = {
 			isa = PBXGroup;
 			children = (
-				F61165DC2F4CFB6A00952235 /* EcoIZ.01 */,
-				F61165EA2F4CFB6B00952235 /* EcoIZ.01Tests */,
-				F61165F42F4CFB6B00952235 /* EcoIZ.01UITests */,
+				F61165DC2F4CFB6A00952235 /* EcoIz-IOS */,
+				F61165EA2F4CFB6B00952235 /* EcoIz-IOSTests */,
+				F61165F42F4CFB6B00952235 /* EcoIz-IOSUITests */,
 				F61165DB2F4CFB6A00952235 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,9 +85,9 @@
 		F61165DB2F4CFB6A00952235 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F61165DA2F4CFB6A00952235 /* EcoIZ.01.app */,
-				F61165E72F4CFB6B00952235 /* EcoIZ.01Tests.xctest */,
-				F61165F12F4CFB6B00952235 /* EcoIZ.01UITests.xctest */,
+				F61165DA2F4CFB6A00952235 /* EcoIz-IOS.app */,
+				F61165E72F4CFB6B00952235 /* EcoIz-IOSTests.xctest */,
+				F61165F12F4CFB6B00952235 /* EcoIz-IOSUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,9 +95,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F61165D92F4CFB6A00952235 /* EcoIZ.01 */ = {
+		F61165D92F4CFB6A00952235 /* EcoIz-IOS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F61165FB2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIZ.01" */;
+			buildConfigurationList = F61165FB2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIz-IOS" */;
 			buildPhases = (
 				F61165D62F4CFB6A00952235 /* Sources */,
 				F61165D72F4CFB6A00952235 /* Frameworks */,
@@ -108,18 +108,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F61165DC2F4CFB6A00952235 /* EcoIZ.01 */,
+				F61165DC2F4CFB6A00952235 /* EcoIz-IOS */,
 			);
-			name = EcoIZ.01;
+			name = "EcoIz-IOS";
 			packageProductDependencies = (
 			);
-			productName = EcoIZ.01;
-			productReference = F61165DA2F4CFB6A00952235 /* EcoIZ.01.app */;
+			productName = "EcoIz-IOS";
+			productReference = F61165DA2F4CFB6A00952235 /* EcoIz-IOS.app */;
 			productType = "com.apple.product-type.application";
 		};
-		F61165E62F4CFB6B00952235 /* EcoIZ.01Tests */ = {
+		F61165E62F4CFB6B00952235 /* EcoIz-IOSTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F61165FE2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIZ.01Tests" */;
+			buildConfigurationList = F61165FE2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIz-IOSTests" */;
 			buildPhases = (
 				F61165E32F4CFB6B00952235 /* Sources */,
 				F61165E42F4CFB6B00952235 /* Frameworks */,
@@ -131,18 +131,18 @@
 				F61165E92F4CFB6B00952235 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				F61165EA2F4CFB6B00952235 /* EcoIZ.01Tests */,
+				F61165EA2F4CFB6B00952235 /* EcoIz-IOSTests */,
 			);
-			name = EcoIZ.01Tests;
+			name = "EcoIz-IOSTests";
 			packageProductDependencies = (
 			);
-			productName = EcoIZ.01Tests;
-			productReference = F61165E72F4CFB6B00952235 /* EcoIZ.01Tests.xctest */;
+			productName = "EcoIz-IOSTests";
+			productReference = F61165E72F4CFB6B00952235 /* EcoIz-IOSTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		F61165F02F4CFB6B00952235 /* EcoIZ.01UITests */ = {
+		F61165F02F4CFB6B00952235 /* EcoIz-IOSUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F61166012F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIZ.01UITests" */;
+			buildConfigurationList = F61166012F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIz-IOSUITests" */;
 			buildPhases = (
 				F61165ED2F4CFB6B00952235 /* Sources */,
 				F61165EE2F4CFB6B00952235 /* Frameworks */,
@@ -154,13 +154,13 @@
 				F61165F32F4CFB6B00952235 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				F61165F42F4CFB6B00952235 /* EcoIZ.01UITests */,
+				F61165F42F4CFB6B00952235 /* EcoIz-IOSUITests */,
 			);
-			name = EcoIZ.01UITests;
+			name = "EcoIz-IOSUITests";
 			packageProductDependencies = (
 			);
-			productName = EcoIZ.01UITests;
-			productReference = F61165F12F4CFB6B00952235 /* EcoIZ.01UITests.xctest */;
+			productName = "EcoIz-IOSUITests";
+			productReference = F61165F12F4CFB6B00952235 /* EcoIz-IOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = F61165D52F4CFB6A00952235 /* Build configuration list for PBXProject "EcoIZ.01" */;
+			buildConfigurationList = F61165D52F4CFB6A00952235 /* Build configuration list for PBXProject "EcoIz-IOS" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -200,9 +200,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F61165D92F4CFB6A00952235 /* EcoIZ.01 */,
-				F61165E62F4CFB6B00952235 /* EcoIZ.01Tests */,
-				F61165F02F4CFB6B00952235 /* EcoIZ.01UITests */,
+				F61165D92F4CFB6A00952235 /* EcoIz-IOS */,
+				F61165E62F4CFB6B00952235 /* EcoIz-IOSTests */,
+				F61165F02F4CFB6B00952235 /* EcoIz-IOSUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -258,12 +258,12 @@
 /* Begin PBXTargetDependency section */
 		F61165E92F4CFB6B00952235 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = F61165D92F4CFB6A00952235 /* EcoIZ.01 */;
+			target = F61165D92F4CFB6A00952235 /* EcoIz-IOS */;
 			targetProxy = F61165E82F4CFB6B00952235 /* PBXContainerItemProxy */;
 		};
 		F61165F32F4CFB6B00952235 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = F61165D92F4CFB6A00952235 /* EcoIZ.01 */;
+			target = F61165D92F4CFB6A00952235 /* EcoIz-IOS */;
 			targetProxy = F61165F22F4CFB6B00952235 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -409,7 +409,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "name.akerke.EcoIZ-01";
+				PRODUCT_BUNDLE_IDENTIFIER = name.akerke.EcoIzIOS;
+				PRODUCT_MODULE_NAME = EcoIz_IOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -442,7 +443,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "name.akerke.EcoIZ-01";
+				PRODUCT_BUNDLE_IDENTIFIER = name.akerke.EcoIzIOS;
+				PRODUCT_MODULE_NAME = EcoIz_IOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -463,7 +465,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "name.akerke.EcoIZ-01Tests";
+				PRODUCT_BUNDLE_IDENTIFIER = name.akerke.EcoIzIOSTests;
+				PRODUCT_MODULE_NAME = EcoIz_IOSTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -471,7 +474,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EcoIZ.01.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EcoIZ.01";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EcoIz-IOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EcoIz-IOS";
 			};
 			name = Debug;
 		};
@@ -484,7 +487,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "name.akerke.EcoIZ-01Tests";
+				PRODUCT_BUNDLE_IDENTIFIER = name.akerke.EcoIzIOSTests;
+				PRODUCT_MODULE_NAME = EcoIz_IOSTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -492,7 +496,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EcoIZ.01.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EcoIZ.01";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EcoIz-IOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EcoIz-IOS";
 			};
 			name = Release;
 		};
@@ -503,7 +507,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "name.akerke.EcoIZ-01UITests";
+				PRODUCT_BUNDLE_IDENTIFIER = name.akerke.EcoIzIOSUITests;
+				PRODUCT_MODULE_NAME = EcoIz_IOSUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -511,7 +516,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = EcoIZ.01;
+				TEST_TARGET_NAME = "EcoIz-IOS";
 			};
 			name = Debug;
 		};
@@ -522,7 +527,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "name.akerke.EcoIZ-01UITests";
+				PRODUCT_BUNDLE_IDENTIFIER = name.akerke.EcoIzIOSUITests;
+				PRODUCT_MODULE_NAME = EcoIz_IOSUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -530,14 +536,14 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = EcoIZ.01;
+				TEST_TARGET_NAME = "EcoIz-IOS";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F61165D52F4CFB6A00952235 /* Build configuration list for PBXProject "EcoIZ.01" */ = {
+		F61165D52F4CFB6A00952235 /* Build configuration list for PBXProject "EcoIz-IOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F61165F92F4CFB6B00952235 /* Debug */,
@@ -546,7 +552,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F61165FB2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIZ.01" */ = {
+		F61165FB2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIz-IOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F61165FC2F4CFB6B00952235 /* Debug */,
@@ -555,7 +561,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F61165FE2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIZ.01Tests" */ = {
+		F61165FE2F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIz-IOSTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F61165FF2F4CFB6B00952235 /* Debug */,
@@ -564,7 +570,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F61166012F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIZ.01UITests" */ = {
+		F61166012F4CFB6B00952235 /* Build configuration list for PBXNativeTarget "EcoIz-IOSUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F61166022F4CFB6B00952235 /* Debug */,

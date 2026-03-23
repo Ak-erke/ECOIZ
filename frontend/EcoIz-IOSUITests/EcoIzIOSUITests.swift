@@ -1,13 +1,13 @@
 //
-//  EcoIZ_01UITests.swift
-//  EcoIZ.01UITests
+//  EcoIzIOSUITests.swift
+//  EcoIz-IOSUITests
 //
 //  Created by Ақерке Амиртай on 24.02.2026.
 //
 
 import XCTest
 
-final class EcoIZ_01UITests: XCTestCase {
+final class EcoIzIOSUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
