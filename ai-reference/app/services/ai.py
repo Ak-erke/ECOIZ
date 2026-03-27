@@ -27,7 +27,7 @@ DEFAULT_SYSTEM_PROMPT = """
 - если ответа точно не знаешь, честно скажи об этом и дай осторожный полезный ориентир;
 - если вопрос широкий, сначала дай прямой ответ, потом 1-3 коротких шага;
 - если пользователь спрашивает "что делать", дай конкретные действия;
-- если пользователю нужна поддержка, поддержи спокойно, но без лишней воды.
+- если пользовательу нужна поддержка, поддержи спокойно, но без лишней воды.
 
 Стиль:
 - коротко;
@@ -54,7 +54,7 @@ def _fallback_response(text: str) -> str:
     if "транспорт" in lowercase or "машин" in lowercase:
         return "Если можешь, замени хотя бы 2-3 поездки в неделю на метро, автобус или пешую ходьбу. Это уже даст заметный эффект."
     if "мотивац" in lowercase or "сложно" in lowercase:
-        return "Не пытайся менять все сразу. Выбери одно маленькое действие на сегодня и держи регулярность."
+        return "Не пытайся менять всё сразу. Выбери одно маленькое действие на сегодня и держи регулярность."
     if any(word in lowercase for word in ("как", "почему", "зачем", "что")):
         return "Если коротко: начни с самого простого практического шага, который можно сделать сегодня. Если хочешь, уточни вопрос, и я отвечу точнее."
     return "Напиши вопрос чуть точнее, и я отвечу коротко и по делу."
@@ -76,15 +76,18 @@ def _activities_summary(user: User, limit: int) -> str:
 
 
 def _challenges_summary(user: User, limit: int) -> str:
-    items = sorted(user.user_challenges, key=lambda item: (item.is_completed, item.challenge.title))[:limit]
+    items = sorted(
+        user.user_challenges,
+        key=lambda item: (item.is_completed, item.challenge.title),
+    )[:limit]
     if not items:
         return "Нет челленджей."
     lines: list[str] = []
     for item in items:
-        status_label = "completed" if item.is_completed else "active"
+        status = "completed" if item.is_completed else "active"
         lines.append(
             f"- {item.challenge.title} | {item.current_count}/{item.challenge.target_count} | "
-            f"status: {status_label} | reward: {item.challenge.reward_points}"
+            f"status: {status} | reward: {item.challenge.reward_points}"
         )
     return "\n".join(lines)
 
@@ -93,7 +96,10 @@ def _posts_summary(user: User, limit: int) -> str:
     posts = sorted(user.posts, key=lambda item: item.created_at, reverse=True)[:limit]
     if not posts:
         return "Нет постов."
-    return "\n".join(f"- {_fmt_dt(item.created_at)} | {item.text[:120]}" for item in posts)
+    return "\n".join(
+        f"- {_fmt_dt(item.created_at)} | {item.text[:120]}"
+        for item in posts
+    )
 
 
 def _chat_summary(user: User, limit: int) -> str:
@@ -140,7 +146,7 @@ def _conversation_messages(user: User, text: str, history_limit: int) -> list[di
             "role": "system",
             "content": (
                 "Ниже контекст пользователя EcoIZ. Используй его только как вспомогательный персональный контекст. "
-                "Не перечисляй все подряд, если это не помогает ответу.\n\n"
+                "Не перечисляй всё подряд, если это не помогает ответу.\n\n"
                 f"{_build_prompt(user, text)}"
             ),
         },
