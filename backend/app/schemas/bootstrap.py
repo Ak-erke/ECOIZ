@@ -59,9 +59,20 @@ class ChatMessageResponse(BaseModel):
     createdAt: datetime
 
 
+class CommunityImpactResponse(BaseModel):
+    totalUsers: int
+    activeUsers: int
+    totalActivities: int
+    totalPosts: int
+    totalChallengesCompleted: int
+    totalCo2Saved: float
+    totalPoints: int
+
+
 class BootstrapResponse(BaseModel):
     user: UserProfileResponse
     activities: list[ActivityResponse]
     challenges: list[ChallengeResponse]
     posts: list[PostResponse]
     chatMessages: list[ChatMessageResponse]
+    communityImpact: CommunityImpactResponse

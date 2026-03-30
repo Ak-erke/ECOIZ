@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -9,6 +10,8 @@ from app.api.deps import get_current_user
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.user import SessionToken, User
+from app.services.auth import hash_password
 from app.services.seed import ensure_seed_data
 
 
@@ -63,6 +66,9 @@ class BackendAPITests(unittest.TestCase):
         self.assertGreaterEqual(len(bootstrap_body["activities"]), 2)
         self.assertGreaterEqual(len(bootstrap_body["chatMessages"]), 1)
         self.assertEqual(len(bootstrap_body["challenges"]), 5)
+        self.assertIn("communityImpact", bootstrap_body)
+        self.assertGreaterEqual(bootstrap_body["communityImpact"]["totalUsers"], 2)
+        self.assertGreaterEqual(bootstrap_body["communityImpact"]["totalActivities"], 2)
 
         chat = self.client.post(
             "/chat/messages",
@@ -98,6 +104,135 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(empty_message.status_code, 400)
         self.assertEqual(empty_message.json()["error"], "Message text is required.")
 
+    def test_session_rotation_and_expiry(self) -> None:
+        first_login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(first_login.status_code, 200)
+        first_token = first_login.json()["token"]
+
+        second_login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(second_login.status_code, 200)
+        second_token = second_login.json()["token"]
+        self.assertNotEqual(first_token, second_token)
+
+        first_bootstrap = self.client.get(
+            "/bootstrap",
+            headers={"Authorization": f"Bearer {first_token}"},
+        )
+        self.assertEqual(first_bootstrap.status_code, 401)
+
+        with self.SessionLocal() as db:
+            session = db.get(SessionToken, second_token)
+            session.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+            db.commit()
+
+        expired_bootstrap = self.client.get(
+            "/bootstrap",
+            headers={"Authorization": f"Bearer {second_token}"},
+        )
+        self.assertEqual(expired_bootstrap.status_code, 401)
+
+    def test_activity_guardrails_and_real_streaks(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        bootstrap = self.client.get(
+            "/bootstrap",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(bootstrap.status_code, 200)
+        before_user = bootstrap.json()["user"]
+        before_plastic = next(
+            item for item in bootstrap.json()["challenges"] if item["title"] == "3 дня без пластика"
+        )
+
+        first_plastic = self.client.post(
+            "/activities",
+            json={
+                "category": "Пластик",
+                "title": "Без пакета",
+                "co2Saved": 0.05,
+                "points": 10,
+                "note": "",
+                "media": [],
+                "shareToNews": False,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(first_plastic.status_code, 201)
+        self.assertEqual(first_plastic.json()["user"]["streakDays"], before_user["streakDays"] + 1)
+
+        duplicate_plastic = self.client.post(
+            "/activities",
+            json={
+                "category": "Пластик",
+                "title": "Без пакета",
+                "co2Saved": 0.05,
+                "points": 10,
+                "note": "",
+                "media": [],
+                "shareToNews": False,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(duplicate_plastic.status_code, 409)
+
+        second_plastic = self.client.post(
+            "/activities",
+            json={
+                "category": "Пластик",
+                "title": "Многоразовая бутылка",
+                "co2Saved": 0.12,
+                "points": 20,
+                "note": "",
+                "media": [],
+                "shareToNews": False,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(second_plastic.status_code, 201)
+        self.assertEqual(second_plastic.json()["user"]["streakDays"], first_plastic.json()["user"]["streakDays"])
+        after_plastic = next(
+            item for item in second_plastic.json()["challenges"] if item["title"] == "3 дня без пластика"
+        )
+        self.assertEqual(after_plastic["currentCount"], before_plastic["currentCount"] + 1)
+
+    def test_custom_activity_uses_server_side_estimation(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        custom = self.client.post(
+            "/activities",
+            json={
+                "category": "Своя активность",
+                "title": "Взял велосипед вместо машины",
+                "co2Saved": 999,
+                "points": 999,
+                "note": "Доехал до учебы на велосипеде и взял многоразовую бутылку.",
+                "media": [],
+                "shareToNews": False,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(custom.status_code, 201)
+        body = custom.json()
+        self.assertEqual(body["activity"]["category"], "Своя активность")
+        self.assertLessEqual(body["activity"]["points"], 18)
+        self.assertLessEqual(body["activity"]["co2Saved"], 1.4)
+
     def test_admin_endpoints(self) -> None:
         login = self.client.post(
             "/admin/login",
@@ -119,6 +254,29 @@ class BackendAPITests(unittest.TestCase):
         )
         self.assertEqual(users.status_code, 200)
         self.assertGreaterEqual(len(users.json()), 2)
+        user_id = users.json()[0]["id"]
+
+        user_detail = self.client.get(
+            f"/admin/users/{user_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(user_detail.status_code, 200)
+        self.assertIn("recentActivities", user_detail.json())
+        self.assertIn("recentPosts", user_detail.json())
+
+        activity_metrics = self.client.get(
+            "/admin/activities/metrics",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(activity_metrics.status_code, 200)
+        self.assertGreaterEqual(activity_metrics.json()["totalActivities"], 1)
+
+        activities = self.client.get(
+            "/admin/activities",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(activities.status_code, 200)
+        self.assertGreaterEqual(len(activities.json()), 1)
 
         categories = self.client.get(
             "/admin/categories",
@@ -245,6 +403,44 @@ class BackendAPITests(unittest.TestCase):
             headers={"Authorization": f"Bearer {token}"},
         )
         self.assertEqual(deleted_category.status_code, 204)
+
+    def test_moderator_cannot_change_user_roles(self) -> None:
+        with self.SessionLocal() as db:
+            moderator = User(
+                full_name="Moderator",
+                email="moderator@ecoiz.app",
+                username="moderator",
+                password_hash=hash_password("moderator123"),
+                role="MODERATOR",
+                status="ACTIVE",
+                is_email_verified=True,
+                points=0,
+                streak_days=0,
+                co2_saved_total=0,
+            )
+            db.add(moderator)
+            db.commit()
+
+        login = self.client.post(
+            "/admin/login",
+            json={"email": "moderator@ecoiz.app", "password": "moderator123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        users = self.client.get(
+            "/admin/users",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(users.status_code, 200)
+        target_user_id = next(item["id"] for item in users.json() if item["email"] == "user@ecoiz.app")
+
+        patch_response = self.client.patch(
+            f"/admin/users/{target_user_id}",
+            json={"role": "ADMIN", "status": "ACTIVE", "adminNote": "Escalation attempt"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(patch_response.status_code, 403)
 
     def test_claim_completed_challenge(self) -> None:
         login = self.client.post(

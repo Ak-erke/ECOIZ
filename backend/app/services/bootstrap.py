@@ -1,5 +1,8 @@
 import base64
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models.chat import ChatMessage
 from app.models.challenge import Challenge
 from app.models.challenge import UserChallenge
@@ -8,6 +11,7 @@ from app.models.user import Activity, User
 from app.schemas.bootstrap import (
     ActivityResponse,
     BootstrapResponse,
+    CommunityImpactResponse,
     ChallengeResponse,
     ChatMessageResponse,
     PostMediaResponse,
@@ -15,26 +19,38 @@ from app.schemas.bootstrap import (
     UserProfileResponse,
 )
 
+LEVELS = [
+    (1, "Эко-новичок", 0, 200),
+    (2, "Эко-исследователь", 200, 400),
+    (3, "Эко-помощник", 400, 700),
+    (4, "Хранитель природы", 700, 1100),
+    (5, "Зеленый герой", 1100, 1600),
+    (6, "Эко-наставник", 1600, 2200),
+    (7, "Защитник планеты", 2200, 3000),
+    (8, "Мастер устойчивости", 3000, 4000),
+    (9, "Амбассадор Eco Iz", 4000, 5500),
+    (10, "Хранитель Земли", 5500, None),
+]
+
 
 def user_level_number(points: int) -> int:
-    if points < 120:
-        return 1
-    if points < 320:
-        return 2
-    return 3
+    for number, _, lower_bound, upper_bound in LEVELS:
+        if upper_bound is None or lower_bound <= points < upper_bound:
+            return number
+    return LEVELS[-1][0]
 
 
 def user_level(points: int) -> str:
     level_number = user_level_number(points)
-    if level_number == 1:
-        return "Эко-новичок"
-    if level_number == 2:
-        return "Эко-воин"
-    return "Хранитель Земли"
+    return next(name for number, name, _, _ in LEVELS if number == level_number)
 
 
 def unlocked_challenge_count(points: int) -> int:
-    return user_level_number(points) * 5
+    if points < 120:
+        return 5
+    if points < 320:
+        return 10
+    return 15
 
 
 def challenge_sort_key(challenge: Challenge) -> tuple[int, str]:
@@ -108,11 +124,32 @@ def serialize_chat_message(message: ChatMessage) -> ChatMessageResponse:
     )
 
 
-def build_bootstrap(user: User) -> BootstrapResponse:
+def serialize_community_impact(db: Session) -> CommunityImpactResponse:
+    users = db.scalars(select(User)).all()
+    activities = db.scalars(select(Activity)).all()
+    posts = db.scalars(select(Post)).all()
+    challenge_items = db.scalars(select(UserChallenge)).all()
+
+    active_user_ids = {item.user_id for item in activities}
+    completed_challenge_count = sum(1 for item in challenge_items if item.is_completed)
+
+    return CommunityImpactResponse(
+        totalUsers=len(users),
+        activeUsers=len(active_user_ids),
+        totalActivities=len(activities),
+        totalPosts=len(posts),
+        totalChallengesCompleted=completed_challenge_count,
+        totalCo2Saved=round(sum(item.co2_saved for item in activities), 2),
+        totalPoints=sum(item.points for item in activities),
+    )
+
+
+def build_bootstrap(user: User, db: Session) -> BootstrapResponse:
     return BootstrapResponse(
         user=serialize_user(user),
         activities=[serialize_activity(item) for item in sorted(user.activities, key=lambda value: value.created_at, reverse=True)],
         challenges=[serialize_user_challenge(item) for item in user.user_challenges],
         posts=[serialize_post(item) for item in sorted(user.posts, key=lambda value: value.created_at, reverse=True)],
         chatMessages=[serialize_chat_message(item) for item in sorted(user.chat_messages, key=lambda value: value.created_at)],
+        communityImpact=serialize_community_impact(db),
     )

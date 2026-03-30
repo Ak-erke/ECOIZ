@@ -1,12 +1,12 @@
 import base64
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_current_admin, get_current_user
+from app.api.deps import get_current_admin, get_current_root_admin, get_current_user
 from app.db.session import get_db
 from app.models.admin import EcoCategory, Habit
 from app.models.challenge import Challenge, UserChallenge
@@ -16,10 +16,15 @@ from app.models.user import Activity, User
 from app.schemas.admin import (
     AchievementMetricsResponse,
     AchievementResponse,
+    AdminActivityMetrics,
     AdminIdentityResponse,
+    AdminUserActivityResponse,
+    AdminUserChallengeResponse,
+    AdminUserDetailResponse,
     AdminLoginRequest,
     AdminSessionResponse,
     AdminUserMetrics,
+    AdminUserPostResponse,
     AdminUserResponse,
     CategoryMetricsResponse,
     CommunityPostResponse,
@@ -50,7 +55,7 @@ from app.schemas.mutations import (
     PostsEnvelope,
 )
 from app.services.ai import ai_response
-from app.services.auth import create_session_token, hash_password
+from app.services.auth import create_session_token, hash_password, needs_password_rehash, verify_password
 from app.services.bootstrap import (
     build_bootstrap,
     serialize_activity,
@@ -85,6 +90,36 @@ def parse_uuid(value: str) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found.") from exc
 
 
+def estimate_custom_activity_impact(title: str, note: str, media_count: int) -> tuple[float, int]:
+    combined = f"{title} {note}".lower()
+    points = 6
+    co2_saved = 0.18
+
+    if any(keyword in combined for keyword in ("велосип", "пеш", "метро", "автобус", "поезд", "самокат")):
+        points += 5
+        co2_saved += 0.55
+    if any(keyword in combined for keyword in ("сортир", "переработ", "вторсыр", "мусор", "компост")):
+        points += 4
+        co2_saved += 0.35
+    if any(keyword in combined for keyword in ("бутыл", "сумк", "упаков", "пластик", "многораз")):
+        points += 3
+        co2_saved += 0.22
+    if any(keyword in combined for keyword in ("душ", "кран", "вода", "утеч")):
+        points += 3
+        co2_saved += 0.18
+    if any(keyword in combined for keyword in ("свет", "ламп", "электр", "заряд", "энерг")):
+        points += 3
+        co2_saved += 0.2
+    if len(note.strip()) > 80:
+        points += 2
+        co2_saved += 0.08
+
+    points += min(media_count, 2)
+    co2_saved += min(media_count, 2) * 0.04
+
+    return round(min(co2_saved, 1.4), 2), min(points, 18)
+
+
 def serialize_admin_identity(user: User) -> AdminIdentityResponse:
     return AdminIdentityResponse(id=str(user.id), email=user.email, username=user.username, role=user.role)
 
@@ -101,6 +136,56 @@ def serialize_admin_user(user: User) -> AdminUserResponse:
         postsCount=len(user.posts),
         createdAt=user.created_at,
         status=user.status,
+    )
+
+
+def serialize_admin_user_detail(user: User) -> AdminUserDetailResponse:
+    recent_activities = sorted(user.activities, key=lambda value: value.created_at, reverse=True)[:6]
+    recent_posts = sorted(user.posts, key=lambda value: value.created_at, reverse=True)[:6]
+    challenge_items = sorted(user.user_challenges, key=lambda value: (value.challenge.reward_points, value.challenge.title))
+
+    return AdminUserDetailResponse(
+        **serialize_admin_user(user).model_dump(),
+        fullName=user.full_name or user.username,
+        level=serialize_user(user).level,
+        co2SavedTotal=user.co2_saved_total,
+        adminNote=user.admin_note or "",
+        recentActivities=[
+            AdminUserActivityResponse(
+                **serialize_activity(item).model_dump(),
+                userId=str(user.id),
+                username=user.username,
+                userEmail=user.email,
+                note=item.note or "",
+            )
+            for item in recent_activities
+        ],
+        challenges=[
+            AdminUserChallengeResponse(**serialize_user_challenge(item).model_dump()) for item in challenge_items
+        ],
+        recentPosts=[
+            AdminUserPostResponse(
+                id=str(item.id),
+                author=item.author_name,
+                content=item.text,
+                visibility=item.visibility,
+                state=item.moderation_state,
+                reportsCount=item.reports_count,
+                createdAt=item.created_at,
+                mediaCount=len(item.media),
+            )
+            for item in recent_posts
+        ],
+    )
+
+
+def serialize_admin_activity(activity: Activity) -> AdminUserActivityResponse:
+    return AdminUserActivityResponse(
+        **serialize_activity(activity).model_dump(),
+        userId=str(activity.user.id),
+        username=activity.user.username,
+        userEmail=activity.user.email,
+        note=activity.note or "",
     )
 
 
@@ -157,8 +242,10 @@ def health() -> HealthResponse:
 @router.post("/auth/login", response_model=AuthResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     user = db.scalar(select(User).where(User.email == payload.email.lower().strip()))
-    if not user or user.password_hash != hash_password(payload.password):
+    if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
+    if needs_password_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
     token = create_session_token(db, user)
     return AuthResponse(token=token, user=serialize_user(user))
 
@@ -197,8 +284,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> AuthRes
 @router.post("/admin/login", response_model=AdminSessionResponse)
 def admin_login(payload: AdminLoginRequest, db: Session = Depends(get_db)) -> AdminSessionResponse:
     user = db.scalar(select(User).where(User.email == payload.email.lower().strip()))
-    if not user or user.password_hash != hash_password(payload.password) or user.role not in {"ADMIN", "MODERATOR"}:
+    if not user or not verify_password(payload.password, user.password_hash) or user.role not in {"ADMIN", "MODERATOR"}:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
+    if needs_password_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
     token = create_session_token(db, user)
     return AdminSessionResponse(token=token, user=serialize_admin_identity(user))
 
@@ -211,7 +300,7 @@ def admin_me(current_admin: User = Depends(get_current_admin)) -> AdminIdentityR
 @router.get("/bootstrap", response_model=BootstrapResponse)
 def bootstrap(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> BootstrapResponse:
     user = fetch_user_with_relations(db, current_user.id)
-    return build_bootstrap(user)
+    return build_bootstrap(user, db)
 
 
 @router.get("/profile")
@@ -250,47 +339,92 @@ def add_activity(
     db: Session = Depends(get_db),
 ) -> ActivityMutationResponse:
     now = datetime.now(timezone.utc)
+    today = now.date()
+    title = payload.title.strip()
+    note = payload.note.strip()
+    if not title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Activity title is required.")
+
+    user = fetch_user_with_relations(db, current_user.id)
+    todays_activities = [item for item in user.activities if item.created_at.date() == today]
+    duplicate_today = any(
+        item.category == payload.category and item.title.casefold() == title.casefold()
+        for item in todays_activities
+    )
+    if duplicate_today:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This activity was already added today.",
+        )
+
+    if payload.category == "Своя активность":
+        computed_co2_saved, computed_points = estimate_custom_activity_impact(title, note, len(payload.media))
+    else:
+        computed_points = max(0, min(payload.points, 60))
+        computed_co2_saved = max(0.0, min(payload.co2Saved, 5.0))
+
     activity = Activity(
-        user_id=current_user.id,
+        user_id=user.id,
         category=payload.category,
-        title=payload.title.strip(),
-        co2_saved=payload.co2Saved,
-        points=payload.points,
-        note=payload.note.strip() or None,
+        title=title,
+        co2_saved=computed_co2_saved,
+        points=computed_points,
+        note=note or None,
         created_at=now,
     )
     db.add(activity)
-    current_user.points += payload.points
-    current_user.co2_saved_total += payload.co2Saved
-    current_user.streak_days = max(1, current_user.streak_days + 1)
+    user.points += computed_points
+    user.co2_saved_total += computed_co2_saved
+    if user.last_activity_on == today:
+        next_streak = user.streak_days
+    elif user.last_activity_on == today - timedelta(days=1):
+        next_streak = max(1, user.streak_days + 1)
+    else:
+        next_streak = 1
+    user.streak_days = next_streak
+    user.last_activity_on = today
 
-    for item in current_user.user_challenges:
+    total_activity_progress_left_today = max(0, 6 - len(todays_activities))
+    already_counted_category_today = {
+        item.category
+        for item in todays_activities
+    }
+
+    for item in user.user_challenges:
         before = item.is_completed
-        title = item.challenge.title
-        if title == "7 эко-действий за неделю":
+        if item.is_completed:
+            continue
+        challenge_title = item.challenge.title
+        if challenge_title == "7 эко-действий за неделю" and total_activity_progress_left_today > 0:
             item.current_count += 1
-        elif title == "3 дня без пластика" and payload.category == "Пластик":
+            total_activity_progress_left_today -= 1
+        elif challenge_title == "3 дня без пластика" and payload.category == "Пластик" and payload.category not in already_counted_category_today:
             item.current_count += 1
-        elif title == "Эко-транспорт" and payload.category == "Транспорт":
+        elif challenge_title == "Эко-транспорт" and payload.category == "Транспорт" and payload.category not in already_counted_category_today:
             item.current_count += 1
         if not before and item.current_count >= item.challenge.target_count:
             item.is_completed = True
             item.completed_at = now
-            current_user.points += item.challenge.reward_points
+            user.points += item.challenge.reward_points
 
-    assign_challenges_for_user(db, current_user, db.scalars(select(Challenge)).all())
+    assign_challenges_for_user(db, user, db.scalars(select(Challenge)).all())
 
     if payload.shareToNews:
-        post = Post(user_id=current_user.id, author_name=current_user.full_name, text=f"Добавил активити: {payload.title} ({payload.category})" + (f"\n{payload.note.strip()}" if payload.note.strip() else ""), created_at=now)
+        post = Post(
+            user_id=user.id,
+            author_name=user.full_name or user.username,
+            text=f"Добавил активити: {title} ({payload.category})" + (f"\n{note}" if note else ""),
+            created_at=now,
+        )
         db.add(post)
         db.flush()
         for media in payload.media:
             db.add(PostMedia(post_id=post.id, kind=media.kind, data=base64.b64decode(media.base64Data.encode("utf-8"))))
 
     db.commit()
-    db.refresh(current_user)
+    db.refresh(user)
     db.refresh(activity)
-    user = fetch_user_with_relations(db, current_user.id)
+    user = fetch_user_with_relations(db, user.id)
     return ActivityMutationResponse(
         activity=serialize_activity(activity),
         user=serialize_user(user),
@@ -322,10 +456,12 @@ def add_chat_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatEnvelope:
-    if not payload.text.strip():
+    trimmed_text = payload.text.strip()
+    if not trimmed_text:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message text is required.")
-    user_message = ChatMessage(user_id=current_user.id, role="user", text=payload.text.strip())
-    assistant_message = ChatMessage(user_id=current_user.id, role="assistant", text=ai_response(payload.text))
+    context_user = fetch_user_with_relations(db, current_user.id)
+    user_message = ChatMessage(user_id=current_user.id, role="user", text=trimmed_text)
+    assistant_message = ChatMessage(user_id=current_user.id, role="assistant", text=ai_response(trimmed_text, user=context_user))
     db.add_all([user_message, assistant_message])
     db.commit()
     db.refresh(user_message)
@@ -394,11 +530,31 @@ def admin_user_metrics(_: User = Depends(get_current_admin), db: Session = Depen
     )
 
 
+@router.get("/admin/users/{user_id}", response_model=AdminUserDetailResponse)
+def admin_user_detail(
+    user_id: str,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> AdminUserDetailResponse:
+    user = db.scalar(
+        select(User)
+        .options(
+            selectinload(User.activities),
+            selectinload(User.posts).selectinload(Post.media),
+            selectinload(User.user_challenges).selectinload(UserChallenge.challenge),
+        )
+        .where(User.id == parse_uuid(user_id))
+    )
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return serialize_admin_user_detail(user)
+
+
 @router.patch("/admin/users/{user_id}", response_model=AdminUserResponse)
 def update_admin_user(
     user_id: str,
     payload: UpdateAdminUserRequest,
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserResponse:
     user = db.scalar(select(User).options(selectinload(User.posts)).where(User.id == parse_uuid(user_id)))
@@ -410,6 +566,43 @@ def update_admin_user(
     db.commit()
     db.refresh(user)
     return serialize_admin_user(user)
+
+
+@router.get("/admin/activities", response_model=list[AdminUserActivityResponse])
+def admin_activities(
+    search: str | None = None,
+    category: str | None = None,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> list[AdminUserActivityResponse]:
+    stmt = select(Activity).options(selectinload(Activity.user)).order_by(Activity.created_at.desc())
+    if category:
+        stmt = stmt.where(Activity.category.ilike(category.strip()))
+    if search:
+        pattern = f"%{search.strip()}%"
+        stmt = stmt.join(Activity.user).where(
+            Activity.title.ilike(pattern)
+            | Activity.category.ilike(pattern)
+            | Activity.note.ilike(pattern)
+            | User.username.ilike(pattern)
+            | User.email.ilike(pattern)
+        )
+    activities = db.scalars(stmt).all()
+    return [serialize_admin_activity(item) for item in activities]
+
+
+@router.get("/admin/activities/metrics", response_model=AdminActivityMetrics)
+def admin_activity_metrics(
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> AdminActivityMetrics:
+    activities = db.scalars(select(Activity)).all()
+    return AdminActivityMetrics(
+        totalActivities=len(activities),
+        totalPoints=sum(item.points for item in activities),
+        totalCo2Saved=round(sum(item.co2_saved for item in activities), 2),
+        uniqueUsers=len({item.user_id for item in activities}),
+    )
 
 
 @router.get("/admin/categories", response_model=list[EcoCategoryResponse])

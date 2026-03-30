@@ -21,11 +21,66 @@ class AdminUserResponse(BaseModel):
     status: str
 
 
+class AdminUserActivityResponse(BaseModel):
+    id: str
+    userId: str
+    username: str
+    userEmail: str
+    category: str
+    title: str
+    co2Saved: float
+    points: int
+    note: str
+    createdAt: datetime
+
+
+class AdminUserChallengeResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    targetCount: int
+    currentCount: int
+    rewardPoints: int
+    badgeSymbol: str
+    badgeTintHex: int
+    badgeBackgroundHex: int
+    isCompleted: bool
+    isClaimed: bool
+
+
+class AdminUserPostResponse(BaseModel):
+    id: str
+    author: str
+    content: str
+    visibility: str
+    state: str
+    reportsCount: int
+    createdAt: datetime
+    mediaCount: int
+
+
+class AdminUserDetailResponse(AdminUserResponse):
+    fullName: str
+    level: str
+    co2SavedTotal: float
+    adminNote: str
+    recentActivities: list[AdminUserActivityResponse]
+    challenges: list[AdminUserChallengeResponse]
+    recentPosts: list[AdminUserPostResponse]
+
+
 class AdminUserMetrics(BaseModel):
     totalUsers: int
     adminCount: int
     needsReview: int
     verifiedCount: int
+
+
+class AdminActivityMetrics(BaseModel):
+    totalActivities: int
+    totalPoints: int
+    totalCo2Saved: float
+    uniqueUsers: int
 
 
 class UpdateAdminUserRequest(BaseModel):

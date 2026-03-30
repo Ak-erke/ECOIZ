@@ -53,6 +53,8 @@ def assign_challenges_for_user(db: Session, user: User, challenges: list[Challen
 
 
 def ensure_seed_data(db: Session) -> None:
+    last_activity_seed_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+
     existing = db.scalar(select(User).where(User.email == "user@ecoiz.app"))
     if not existing:
         user = User(
@@ -65,12 +67,14 @@ def ensure_seed_data(db: Session) -> None:
             is_email_verified=True,
             points=90,
             streak_days=2,
+            last_activity_on=last_activity_seed_date,
             co2_saved_total=8.6,
         )
         db.add(user)
         db.flush()
     else:
         user = existing
+        user.last_activity_on = last_activity_seed_date
 
     admin = db.scalar(select(User).where(User.email == "admin@ecoiz.app"))
     if not admin:
@@ -84,6 +88,7 @@ def ensure_seed_data(db: Session) -> None:
             is_email_verified=True,
             points=0,
             streak_days=0,
+            last_activity_on=None,
             co2_saved_total=0,
         )
         db.add(admin)
@@ -168,6 +173,7 @@ def ensure_seed_data(db: Session) -> None:
             )
 
     assign_challenges_for_user(db, user, challenges)
+    db.flush()
 
     user_challenges = db.scalars(select(UserChallenge).where(UserChallenge.user_id == user.id)).all()
     if len(user_challenges) >= 3:
