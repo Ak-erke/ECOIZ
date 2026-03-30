@@ -5,6 +5,7 @@ xcuserdata/
 # Build artifacts
 DerivedData/
 .deriveddata/
+.deriveddata-device/
 build/
 
 # Swift Package Manager
@@ -29,3 +30,6 @@ htmlcov/
 .venv/
 venv/
 *.egg-info/
+node_modules/
+.next/
+admin-web/.env.local

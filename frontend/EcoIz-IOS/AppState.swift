@@ -24,6 +24,15 @@ final class AppState: ObservableObject {
     @Published var challenges: [Challenge] = []
     @Published var posts: [EcoPost] = []
     @Published var chatMessages: [ChatMessage] = []
+    @Published var communityImpact = CommunityImpact(
+        totalUsers: 0,
+        activeUsers: 0,
+        totalActivities: 0,
+        totalPosts: 0,
+        totalChallengesCompleted: 0,
+        totalCo2Saved: 0,
+        totalPoints: 0
+    )
 
     private let apiClient: APIClient
     private var didAttemptSessionRestore = false
@@ -243,6 +252,7 @@ final class AppState: ObservableObject {
         challenges = bootstrap.challenges
         posts = bootstrap.posts
         chatMessages = bootstrap.chatMessages
+        communityImpact = bootstrap.communityImpact
         if chatMessages.isEmpty {
             chatMessages = [
                 ChatMessage(isUser: false, text: "Привет! Я эко-ИИ. Помогу улучшить твои экопривычки и мотивацию.", createdAt: Date())
@@ -263,6 +273,15 @@ final class AppState: ObservableObject {
         activities = []
         challenges = []
         posts = []
+        communityImpact = CommunityImpact(
+            totalUsers: 0,
+            activeUsers: 0,
+            totalActivities: 0,
+            totalPosts: 0,
+            totalChallengesCompleted: 0,
+            totalCo2Saved: 0,
+            totalPoints: 0
+        )
         chatMessages = [
             ChatMessage(isUser: false, text: "Привет! Я эко-ИИ. Помогу улучшить твои экопривычки и мотивацию.", createdAt: Date())
         ]

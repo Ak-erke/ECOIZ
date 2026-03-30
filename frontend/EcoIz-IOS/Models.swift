@@ -155,6 +155,16 @@ struct UserProfile: Codable {
     }
 }
 
+struct CommunityImpact: Codable {
+    let totalUsers: Int
+    let activeUsers: Int
+    let totalActivities: Int
+    let totalPosts: Int
+    let totalChallengesCompleted: Int
+    let totalCo2Saved: Double
+    let totalPoints: Int
+}
+
 struct Challenge: Identifiable, Codable {
     let id: String
     let title: String

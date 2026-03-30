@@ -136,10 +136,10 @@ private struct LevelUpCelebrationOverlay: View {
                     .opacity(glowOpacity)
             }
             .padding(28)
-            .background(Color.white.opacity(0.96), in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .background(EcoTheme.elevatedCard, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.white.opacity(0.75), lineWidth: 1)
+                    .stroke(EcoTheme.softStroke, lineWidth: 1)
             )
             .padding(.horizontal, 28)
             .onAppear {
@@ -157,6 +157,14 @@ private struct LevelUpCelebrationOverlay: View {
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            ContentView()
+                .preferredColorScheme(.light)
+
+            ContentView()
+                .preferredColorScheme(.dark)
+        }
+    }
 }

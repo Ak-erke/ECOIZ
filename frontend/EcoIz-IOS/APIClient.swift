@@ -35,6 +35,7 @@ struct BootstrapResponse: Decodable {
     let challenges: [Challenge]
     let posts: [EcoPost]
     let chatMessages: [ChatMessage]
+    let communityImpact: CommunityImpact
 }
 
 struct ActivityMutationResponse: Decodable {
@@ -271,7 +272,17 @@ final class APIClient {
     }
 
     private static func resolveBaseURL() -> String {
+        if let override = UserDefaults.standard.string(forKey: "ecoiz.backend.baseURLOverride")?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            return override
+        }
+
+        #if targetEnvironment(simulator)
         return "http://127.0.0.1:8000"
+        #else
+        return "http://MacBook-Pro--Erke.local:8000"
+        #endif
     }
 
     private static func makeDecoder() -> JSONDecoder {
