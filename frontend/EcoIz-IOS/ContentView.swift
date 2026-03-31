@@ -161,6 +161,14 @@ private struct LevelUpCelebrationOverlay: View {
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            ContentView()
+                .preferredColorScheme(.light)
+
+            ContentView()
+                .preferredColorScheme(.dark)
+        }
+    }
 }

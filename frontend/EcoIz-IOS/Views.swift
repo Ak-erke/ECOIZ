@@ -2,6 +2,41 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
+private extension ActivityCategory {
+    var systemIconName: String {
+        switch self {
+        case .transport: return "figure.walk"
+        case .plastic: return "bag"
+        case .water: return "drop"
+        case .waste: return "arrow.3.trianglepath"
+        case .energy: return "bolt"
+        case .custom: return "sparkles"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .transport: return Color(hex: 0xFF9D1F)
+        case .plastic: return Color(hex: 0x20D8C3)
+        case .water: return Color(hex: 0x2DA9F5)
+        case .waste: return Color(hex: 0x69D85A)
+        case .energy: return Color(hex: 0xF2BF18)
+        case .custom: return EcoTheme.primary
+        }
+    }
+
+    var pageGradient: [Color] {
+        switch self {
+        case .transport: return [Color(hex: 0xFFC86A), Color(hex: 0xFFB33E), Color(hex: 0xFF9D1F)]
+        case .plastic: return [Color(hex: 0x74F2E0), Color(hex: 0x42E2CE), Color(hex: 0x20D8C3)]
+        case .water: return [Color(hex: 0x7DD4FF), Color(hex: 0x50BDF9), Color(hex: 0x2DA9F5)]
+        case .waste: return [Color(hex: 0x95ED7C), Color(hex: 0x78E163), Color(hex: 0x69D85A)]
+        case .energy: return [Color(hex: 0xFFE06E), Color(hex: 0xF8CD33), Color(hex: 0xF2BF18)]
+        case .custom: return [Color(hex: 0x9FBEFF), Color(hex: 0x7DA6FF), EcoTheme.primary]
+        }
+    }
+}
+
 struct AuthView: View {
     @EnvironmentObject private var appState: AppState
     @State private var stage: AuthStage = .welcome
@@ -34,7 +69,8 @@ struct AuthView: View {
                 ZStack {
                     EcoBackground()
 
-                    VStack(spacing: compact ? 14 : 18) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: compact ? 14 : 18) {
                         HStack {
                             if stage != .welcome {
                                 Button {
@@ -240,6 +276,8 @@ struct AuthView: View {
                     }
                     .padding(.horizontal, compact ? 14 : 18)
                     .padding(.bottom, compact ? 16 : 20)
+                    .frame(minHeight: proxy.size.height)
+                    }
                 }
             }
             .navigationBarHidden(true)
@@ -289,7 +327,7 @@ struct MainTabView: View {
 
             ZStack(alignment: .bottom) {
                 TabView(selection: $selectedTab) {
-                    HomeView()
+                    HomeView(selectedTab: $selectedTab)
                         .tabItem { Label("Главная", systemImage: "house.fill") }
                         .tag(0)
 
@@ -375,19 +413,28 @@ struct MainTabView: View {
 
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
+    @Binding var selectedTab: Int
     @State private var heroProgress: CGFloat = 0
     @State private var contentVisible = false
     @State private var chartProgress: CGFloat = 0
-    @State private var selectedTrendIndex = 3
+    @State private var selectedTrendIndex = 5
 
-    private let trend: [TrendDataPoint] = [
-        .init(day: "Пн", points: 360),
-        .init(day: "Вт", points: 420),
-        .init(day: "Ср", points: 600),
-        .init(day: "Чт", points: 520),
-        .init(day: "Пт", points: 660),
-        .init(day: "Сб", points: 480)
-    ]
+    private var trend: [TrendDataPoint] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "EE"
+
+        return (0..<6).map { offset in
+            let dayDate = calendar.date(byAdding: .day, value: offset - 5, to: today) ?? today
+            let points = appState.activities
+                .filter { calendar.isDate($0.createdAt, inSameDayAs: dayDate) }
+                .reduce(0) { $0 + $1.points }
+            return TrendDataPoint(day: formatter.string(from: dayDate).capitalized, points: points)
+        }
+    }
+
     private var levelInfo: (name: String, progress: CGFloat, remaining: Int) {
         let level = appState.user.level
         guard let upperBound = level.upperBoundExclusive else {
@@ -399,7 +446,7 @@ struct HomeView: View {
     }
 
     private var selectedPoint: TrendDataPoint {
-        trend[selectedTrendIndex]
+        trend[min(max(selectedTrendIndex, 0), max(trend.count - 1, 0))]
     }
 
     private var streakVisualProgress: CGFloat {
@@ -465,62 +512,72 @@ struct HomeView: View {
                             Group {
                                 if compactLayout {
                                 VStack(alignment: .leading, spacing: 10) {
-                                    HStack(spacing: 12) {
-                                        Circle()
-                                            .fill(Color(hex: 0x111111))
-                                            .frame(width: avatarSize, height: avatarSize)
-                                            .overlay(
-                                                Text(initials(from: appState.user.fullName))
-                                                    .font(EcoTypography.title2)
-                                                    .foregroundStyle(.white)
-                                            )
-                                            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                                    Button {
+                                        selectedTab = 4
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Circle()
+                                                .fill(Color(hex: 0x111111))
+                                                .frame(width: avatarSize, height: avatarSize)
+                                                .overlay(
+                                                    Text(initials(from: appState.user.fullName))
+                                                        .font(EcoTypography.title2)
+                                                        .foregroundStyle(.white)
+                                                )
+                                                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
 
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text(appState.user.fullName)
-                                                .font(EcoTypography.title1)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.7)
-                                            PillBadge(
-                                                icon: "trophy.fill",
-                                                text: appState.user.level.rawValue,
-                                                foreground: EcoTheme.ink,
-                                                background: Color.white.opacity(0.72)
-                                            )
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text(appState.user.fullName)
+                                                    .font(EcoTypography.title1)
+                                                    .lineLimit(1)
+                                                    .minimumScaleFactor(0.7)
+                                                PillBadge(
+                                                    icon: "trophy.fill",
+                                                    text: appState.user.level.rawValue,
+                                                    foreground: EcoTheme.ink,
+                                                    background: Color.white.opacity(0.72)
+                                                )
+                                            }
+                                            Spacer(minLength: 0)
                                         }
-                                        Spacer(minLength: 0)
+                                        .contentShape(Rectangle())
                                     }
-
+                                    .buttonStyle(.plain)
                                 }
                                 } else {
-                                HStack(alignment: .top) {
-                                    HStack(spacing: 12) {
-                                        Circle()
-                                            .fill(Color(hex: 0x111111))
-                                            .frame(width: avatarSize, height: avatarSize)
-                                            .overlay(
-                                                Text(initials(from: appState.user.fullName))
-                                                    .font(EcoTypography.title2)
-                                                    .foregroundStyle(.white)
-                                            )
-                                            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                                Button {
+                                    selectedTab = 4
+                                } label: {
+                                    HStack(alignment: .top) {
+                                        HStack(spacing: 12) {
+                                            Circle()
+                                                .fill(Color(hex: 0x111111))
+                                                .frame(width: avatarSize, height: avatarSize)
+                                                .overlay(
+                                                    Text(initials(from: appState.user.fullName))
+                                                        .font(EcoTypography.title2)
+                                                        .foregroundStyle(.white)
+                                                )
+                                                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
 
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text(appState.user.fullName)
-                                                .font(EcoTypography.title1)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.7)
-                                            PillBadge(
-                                                icon: "trophy.fill",
-                                                text: appState.user.level.rawValue,
-                                                foreground: EcoTheme.ink,
-                                                background: Color.white.opacity(0.72)
-                                            )
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text(appState.user.fullName)
+                                                    .font(EcoTypography.title1)
+                                                    .lineLimit(1)
+                                                    .minimumScaleFactor(0.7)
+                                                PillBadge(
+                                                    icon: "trophy.fill",
+                                                    text: appState.user.level.rawValue,
+                                                    foreground: EcoTheme.ink,
+                                                    background: Color.white.opacity(0.72)
+                                                )
+                                            }
                                         }
+                                        Spacer()
                                     }
-
-                                    Spacer()
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
                             }
                         .opacity(contentVisible ? 1 : 0)
@@ -646,14 +703,12 @@ struct HomeView: View {
                                 Text("Динамика активностей")
                                     .font(EcoTypography.title2)
                                 Spacer()
-                                Menu("Эта неделя") {
-                                    Button("Эта неделя") {}
-                                    Button("Прошлая неделя") {}
-                                }
-                                .font(EcoTypography.subheadline)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                Text("Последние 6 дней")
+                                    .font(EcoTypography.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
 
                             TrendChart(
@@ -953,16 +1008,16 @@ struct AddActivityView: View {
                                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                                     .fill(
                                         LinearGradient(
-                                            colors: [color(for: selectedCategory).opacity(0.75), color(for: selectedCategory)],
+                                            colors: selectedCategory.pageGradient,
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     )
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                            .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                                    )
-                                    .shadow(color: color(for: selectedCategory).opacity(0.28), radius: 14, y: 8)
+                                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                                        )
+                                    .shadow(color: selectedCategory.tintColor.opacity(0.28), radius: 14, y: 8)
 
                                 if let pendingSubmission {
                                     VStack(alignment: .leading, spacing: 16) {
@@ -1236,8 +1291,8 @@ struct AddActivityView: View {
                                         ForEach(quickCategories) { category in
                                             AddCategoryTile(
                                                 title: category.rawValue,
-                                                icon: icon(for: category),
-                                                tint: color(for: category),
+                                                icon: category.systemIconName,
+                                                tint: category.tintColor,
                                                 isSelected: false
                                             ) {
                                                 withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
@@ -1927,9 +1982,9 @@ struct ProfileView: View {
                                         .fill(Color(hex: 0xEAF5FF))
                                         .frame(width: 28, height: 28)
                                         .overlay(
-                                            Image(systemName: icon(for: activity.category))
+                                            Image(systemName: activity.category.systemIconName)
                                                 .font(.system(size: 12, weight: .bold))
-                                                .foregroundStyle(EcoTheme.primary)
+                                                .foregroundStyle(activity.category.tintColor)
                                         )
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(activity.title)
@@ -1974,17 +2029,6 @@ struct ProfileView: View {
         let words = name.split(separator: " ")
         let chars = words.prefix(2).compactMap { $0.first }
         return String(chars).uppercased()
-    }
-
-    private func icon(for category: ActivityCategory) -> String {
-        switch category {
-        case .transport: return "tram.fill"
-        case .plastic: return "bag.fill"
-        case .water: return "drop.fill"
-        case .waste: return "arrow.triangle.2.circlepath"
-        case .energy: return "bolt.fill"
-        case .custom: return "sparkles"
-        }
     }
 
     private func relativeTime(_ date: Date) -> String {
@@ -2042,9 +2086,9 @@ private struct AllActivitiesView: View {
                                         .fill(Color(hex: 0xEAF5FF))
                                         .frame(width: 32, height: 32)
                                         .overlay(
-                                            Image(systemName: icon(for: activity.category))
+                                            Image(systemName: activity.category.systemIconName)
                                                 .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(EcoTheme.primary)
+                                                .foregroundStyle(activity.category.tintColor)
                                         )
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(activity.title)
@@ -2074,17 +2118,6 @@ private struct AllActivitiesView: View {
                     Button("Закрыть") { dismiss() }
                 }
             }
-        }
-    }
-
-    private func icon(for category: ActivityCategory) -> String {
-        switch category {
-        case .transport: return "tram.fill"
-        case .plastic: return "bag.fill"
-        case .water: return "drop.fill"
-        case .waste: return "arrow.triangle.2.circlepath"
-        case .energy: return "bolt.fill"
-        case .custom: return "sparkles"
         }
     }
 

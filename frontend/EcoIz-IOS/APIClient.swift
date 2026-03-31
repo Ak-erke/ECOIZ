@@ -21,7 +21,8 @@ enum APIError: LocalizedError {
 }
 
 private struct APIErrorResponse: Decodable {
-    let error: String
+    let error: String?
+    let detail: String?
 }
 
 struct AuthSessionResponse: Decodable {
@@ -120,7 +121,10 @@ final class APIClient {
         let response: AuthSessionResponse = try await request(
             path: "/auth/login",
             method: "POST",
-            body: LoginRequest(email: email, password: password),
+            body: LoginRequest(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            ),
             requiresAuth: false
         )
         storedToken = response.token
@@ -131,7 +135,11 @@ final class APIClient {
         let response: AuthSessionResponse = try await request(
             path: "/auth/register",
             method: "POST",
-            body: RegisterRequest(fullName: name, email: email, password: password),
+            body: RegisterRequest(
+                fullName: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            ),
             requiresAuth: false
         )
         storedToken = response.token
@@ -235,14 +243,19 @@ final class APIClient {
             throw APIError.invalidResponse
         }
 
-        if httpResponse.statusCode == 401 {
-            clearToken()
-            throw APIError.unauthorized
-        }
-
         guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                if requiresAuth {
+                    clearToken()
+                    throw APIError.unauthorized
+                }
+                if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                    throw APIError.server(errorResponse.error ?? errorResponse.detail ?? "Неверный email или пароль.")
+                }
+                throw APIError.server("Неверный email или пароль.")
+            }
             if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
-                throw APIError.server(errorResponse.error)
+                throw APIError.server(errorResponse.error ?? errorResponse.detail ?? "Backend вернул ошибку.")
             }
             throw APIError.invalidResponse
         }
