@@ -1,0 +1,21 @@
+{
+  "name": "ecoiz-database",
+  "version": "1.0.0",
+  "description": "Ecoiz database setup with Prisma 6 and PostgreSQL",
+  "main": "index.js",
+  "scripts": {
+    "migrate": "prisma migrate dev",
+    "studio": "prisma studio",
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@prisma/client": "^6.0.0",
+    "prisma": "^6.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.5.0"
+  }
+}

@@ -1,0 +1,382 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums used across the schema
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum HabitStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum PostVisibility {
+  PUBLIC
+  FOLLOWERS
+  PRIVATE
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  POST_LIKE
+  POST_COMMENT
+  FOLLOW
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  ACHIEVEMENT_UNLOCKED
+  SYSTEM
+}
+
+// Models
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
+  password        String
+  role            UserRole  @default(USER)
+  isEmailVerified Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  profile                 Profile?
+  refreshTokens           RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  posts                   Post[]
+  userHabits              UserHabit[]
+  userAchievements        UserAchievement[]
+  achievementProgress     AchievementProgress[]
+  postLikes               PostLike[]
+  postComments            PostComment[]
+  stats                   UserStats?
+  dailyStats              DailyStat[]
+  sentFollows             UserFollow[]             @relation("follow_sender")
+  receivedFollows         UserFollow[]             @relation("follow_receiver")
+  sentFriendRequests      Friendship[]             @relation("friend_requester")
+  receivedFriendRequests  Friendship[]             @relation("friend_addressee")
+  notifications           Notification[]
+  activityLogs            HabitLog[]
+  createdHabits           Habit[]                  @relation("createdHabits")
+
+  @@map("user")
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String   @unique
+  displayName String?
+  bio         String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("profile")
+}
+
+model EcoCategory {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  color       String?
+  icon        String?
+  habits      Habit[]
+
+  @@map("eco_category")
+}
+
+model Habit {
+  id            String  @id @default(uuid())
+  title         String
+  description   String?
+  icon          String?
+  points        Int     @default(10)
+  co2Value      Float   @default(0)
+  waterValue    Float   @default(0)
+  energyValue   Float   @default(0)
+  recycledValue Int     @default(0)
+  isCustom      Boolean @default(false)
+
+  categoryId String
+  category   EcoCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  creatorId String?
+  creator   User?   @relation("createdHabits", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userHabits UserHabit[]
+  logs       HabitLog[]
+
+  @@index([categoryId])
+  @@index([creatorId])
+  @@map("habits")
+}
+
+model UserHabit {
+  id        String      @id @default(uuid())
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  habit     Habit       @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  habitId   String
+  startDate DateTime    @default(now())
+  endDate   DateTime?
+  status    HabitStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  logs      HabitLog[]
+
+  @@unique([userId, habitId])
+  @@index([habitId])
+  @@map("user_habit")
+}
+
+model HabitLog {
+  id            String    @id @default(uuid())
+  userHabit     UserHabit @relation(fields: [userHabitId], references: [id], onDelete: Cascade)
+  userHabitId   String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  habit         Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  habitId       String
+  pointsEarned  Int       @default(0)
+  co2Saved      Float     @default(0)
+  waterSaved    Float     @default(0)
+  energySaved   Float     @default(0)
+  recycledItems Int       @default(0)
+  performedAt   DateTime  @default(now())
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  @@index([userHabitId])
+  @@index([userId])
+  @@index([habitId])
+  @@index([performedAt])
+  @@map("habit_log")
+}
+
+model Achievement {
+  id              String                @id @default(uuid())
+  title           String
+  description     String?
+  icon            String?
+  targetValue     Int                   @default(1)
+  rewardPoints    Int                   @default(0)
+  createdAt       DateTime              @default(now())
+  users           UserAchievement[]
+  progressRecords AchievementProgress[]
+
+  @@map("achievement")
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  achievementId String
+  obtainedAt    DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+  @@index([achievementId])
+  @@map("user_achievement")
+}
+
+model Post {
+  id         String         @id @default(uuid())
+  author     User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String
+  content    String
+  imageUrl   String?
+  visibility PostVisibility @default(PUBLIC)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  likes      PostLike[]
+  comments   PostComment[]
+
+  @@index([authorId])
+  @@map("post")
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@map("post_like")
+}
+
+model PostComment {
+  id        String   @id @default(uuid())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("post_comment")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_token")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("email_verification_token")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_token")
+}
+
+model UserFollow {
+  id          String   @id @default(uuid())
+  follower    User     @relation("follow_sender", fields: [followerId], references: [id], onDelete: Cascade)
+  followerId  String
+  following   User     @relation("follow_receiver", fields: [followingId], references: [id], onDelete: Cascade)
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("user_follow")
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requester   User             @relation("friend_requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  requesterId String
+  addressee   User             @relation("friend_addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
+  @@index([status])
+  @@map("friendship")
+}
+
+model Notification {
+  id            String           @id @default(uuid())
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  type          NotificationType
+  title         String
+  body          String?
+  isRead        Boolean          @default(false)
+  relatedUserId String?
+  relatedPostId String?
+  createdAt     DateTime         @default(now())
+
+  @@index([userId])
+  @@index([relatedUserId])
+  @@index([relatedPostId])
+  @@index([isRead])
+  @@map("notification")
+}
+
+model UserStats {
+  id                 String   @id @default(uuid())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String   @unique
+  level              Int      @default(1)
+  ecoPoints          Int      @default(0)
+  streakDays         Int      @default(0)
+  co2SavedTotal      Float    @default(0)
+  waterSavedTotal    Float    @default(0)
+  energySavedTotal   Float    @default(0)
+  recycledItemsTotal Int      @default(0)
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+
+  @@map("user_stats")
+}
+
+model DailyStat {
+  id            String   @id @default(uuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  date          DateTime
+  pointsEarned  Int      @default(0)
+  co2Saved      Float    @default(0)
+  waterSaved    Float    @default(0)
+  energySaved   Float    @default(0)
+  recycledItems Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("daily_stat")
+}
+
+model AchievementProgress {
+  id            String      @id @default(uuid())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  achievementId String
+  currentValue  Int         @default(0)
+  targetValue   Int
+  completedAt   DateTime?
+  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+  @@index([achievementId])
+  @@map("achievement_progress")
+}
