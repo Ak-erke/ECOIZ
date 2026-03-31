@@ -85,6 +85,71 @@ class BackendAPITests(unittest.TestCase):
         self.assertTrue(messages[0]["isUser"])
         self.assertFalse(messages[1]["isUser"])
         self.assertIn("душ", messages[1]["text"])
+        self.assertNotIn("уточни вопрос", messages[1]["text"].lower())
+
+    def test_chat_uses_personalized_fallback_for_next_step_questions(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        chat = self.client.post(
+            "/chat/messages",
+            json={"text": "Я сегодня дома, что мне дальше делать?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(chat.status_code, 201)
+        assistant_text = chat.json()["messages"][1]["text"].lower()
+        self.assertTrue(any(word in assistant_text for word in ("свет", "душ", "вода", "пласт", "энерг")))
+        self.assertNotIn("уточни вопрос", assistant_text)
+
+    def test_chat_analyzes_user_activities_individually(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        chat = self.client.post(
+            "/chat/messages",
+            json={"text": "Проанализируй мои активности"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(chat.status_code, 201)
+        assistant_text = chat.json()["messages"][1]["text"].lower()
+        self.assertIn("активност", assistant_text)
+        self.assertTrue(any(word in assistant_text for word in ("категор", "вклад", "последн", "очков")))
+        self.assertNotIn("уточни вопрос", assistant_text)
+
+    def test_chat_keeps_context_for_outdoor_follow_up(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        first = self.client.post(
+            "/chat/messages",
+            json={"text": "Я хочу выйти погулять, что могу сделать?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(first.status_code, 201)
+        first_text = first.json()["messages"][1]["text"].lower()
+        self.assertTrue(any(word in first_text for word in ("гуля", "пеш", "прогул", "бутыл")))
+
+        second = self.client.post(
+            "/chat/messages",
+            json={"text": "А завтра?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(second.status_code, 201)
+        second_text = second.json()["messages"][1]["text"].lower()
+        self.assertIn("завтра", second_text)
+        self.assertTrue(any(word in second_text for word in ("пеш", "бутыл", "ритм")))
 
     def test_error_responses(self) -> None:
         unauthorized = self.client.get(
@@ -234,8 +299,8 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(custom.status_code, 201)
         body = custom.json()
         self.assertEqual(body["activity"]["category"], "Своя активность")
-        self.assertLessEqual(body["activity"]["points"], 18)
-        self.assertLessEqual(body["activity"]["co2Saved"], 1.4)
+        self.assertLessEqual(body["activity"]["points"], 14)
+        self.assertLessEqual(body["activity"]["co2Saved"], 1.1)
 
     def test_admin_endpoints(self) -> None:
         login = self.client.post(
@@ -328,15 +393,14 @@ class BackendAPITests(unittest.TestCase):
             },
             headers={"Authorization": f"Bearer {token}"},
         )
-        self.assertEqual(created_category.status_code, 201)
-        created_category_body = created_category.json()
+        self.assertEqual(created_category.status_code, 400)
 
         created_habit = self.client.post(
             "/admin/habits",
             json={
                 "title": "Проветривать комнату осознанно",
                 "description": "Короткое и эффективное проветривание",
-                "category": "Воздух",
+                "category": "Энергия",
                 "points": 6,
                 "co2Value": 0.1,
                 "waterValue": 0.0,
@@ -401,12 +465,6 @@ class BackendAPITests(unittest.TestCase):
             headers={"Authorization": f"Bearer {token}"},
         )
         self.assertEqual(deleted_habit.status_code, 204)
-
-        deleted_category = self.client.delete(
-            f"/admin/categories/{created_category_body['id']}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        self.assertEqual(deleted_category.status_code, 204)
 
     def test_moderator_cannot_change_user_roles(self) -> None:
         with self.SessionLocal() as db:

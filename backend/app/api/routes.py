@@ -92,29 +92,36 @@ def parse_uuid(value: str) -> uuid.UUID:
 
 def estimate_custom_activity_impact(title: str, note: str) -> tuple[float, int]:
     combined = f"{title} {note}".lower()
-    points = 6
-    co2_saved = 0.18
+    trimmed_note = note.strip()
+    points = 4
+    co2_saved = 0.12
 
     if any(keyword in combined for keyword in ("велосип", "пеш", "метро", "автобус", "поезд", "самокат")):
-        points += 5
-        co2_saved += 0.55
-    if any(keyword in combined for keyword in ("сортир", "переработ", "вторсыр", "мусор", "компост")):
         points += 4
-        co2_saved += 0.35
+        co2_saved += 0.42
+    if any(keyword in combined for keyword in ("сортир", "переработ", "вторсыр", "мусор", "компост")):
+        points += 3
+        co2_saved += 0.28
     if any(keyword in combined for keyword in ("бутыл", "сумк", "упаков", "пластик", "многораз")):
-        points += 3
-        co2_saved += 0.22
-    if any(keyword in combined for keyword in ("душ", "кран", "вода", "утеч")):
-        points += 3
-        co2_saved += 0.18
-    if any(keyword in combined for keyword in ("свет", "ламп", "электр", "заряд", "энерг")):
-        points += 3
-        co2_saved += 0.2
-    if len(note.strip()) > 80:
         points += 2
-        co2_saved += 0.08
+        co2_saved += 0.16
+    if any(keyword in combined for keyword in ("душ", "кран", "вода", "утеч")):
+        points += 2
+        co2_saved += 0.14
+    if any(keyword in combined for keyword in ("свет", "ламп", "электр", "заряд", "энерг")):
+        points += 2
+        co2_saved += 0.16
+    if any(keyword in combined for keyword in ("вместо", "отказ", "замен", "сэконом")):
+        points += 2
+        co2_saved += 0.1
+    if len(trimmed_note) > 90:
+        points += 1
+        co2_saved += 0.06
+    if len(trimmed_note) < 28:
+        points = min(points, 6)
+        co2_saved = min(co2_saved, 0.22)
 
-    return round(min(co2_saved, 1.4), 2), min(points, 18)
+    return round(min(co2_saved, 1.1), 2), min(points, 14)
 
 
 def serialize_admin_identity(user: User) -> AdminIdentityResponse:

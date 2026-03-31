@@ -394,25 +394,46 @@ struct MainTabView: View {
 }
 
 struct HomeView: View {
+    private enum TrendRange: String {
+        case week = "7 дней"
+        case month = "30 дней"
+    }
+
     @EnvironmentObject private var appState: AppState
     @Binding var selectedTab: Int
     @State private var heroProgress: CGFloat = 0
     @State private var contentVisible = false
     @State private var chartProgress: CGFloat = 0
-    @State private var selectedTrendIndex = 5
+    @State private var selectedTrendRange: TrendRange = .week
+    @State private var selectedTrendIndex = 6
     private var trend: [TrendDataPoint] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "EE"
+        formatter.dateFormat = selectedTrendRange == .week ? "EE" : "d MMM"
 
-        return (0..<6).map { offset in
-            let dayDate = calendar.date(byAdding: .day, value: offset - 5, to: today) ?? today
-            let points = appState.activities
-                .filter { calendar.isDate($0.createdAt, inSameDayAs: dayDate) }
-                .reduce(0) { $0 + $1.points }
-            return TrendDataPoint(day: formatter.string(from: dayDate).capitalized, points: points)
+        switch selectedTrendRange {
+        case .week:
+            return (0..<7).map { offset in
+                let dayDate = calendar.date(byAdding: .day, value: offset - 6, to: today) ?? today
+                let points = appState.activities
+                    .filter { calendar.isDate($0.createdAt, inSameDayAs: dayDate) }
+                    .reduce(0) { $0 + $1.points }
+                return TrendDataPoint(day: formatter.string(from: dayDate).capitalized, points: points)
+            }
+        case .month:
+            return (0..<4).map { offset in
+                let start = calendar.date(byAdding: .day, value: -27 + offset * 7, to: today) ?? today
+                let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+                let points = appState.activities
+                    .filter {
+                        let day = calendar.startOfDay(for: $0.createdAt)
+                        return day >= start && day <= end
+                    }
+                    .reduce(0) { $0 + $1.points }
+                return TrendDataPoint(day: "\(offset + 1) нед", points: points)
+            }
         }
     }
     private var levelInfo: (name: String, progress: CGFloat, remaining: Int) {
@@ -427,6 +448,13 @@ struct HomeView: View {
 
     private var selectedPoint: TrendDataPoint {
         trend[min(max(selectedTrendIndex, 0), max(trend.count - 1, 0))]
+    }
+
+    private var trendAxisValues: [Int] {
+        let maxValue = max(trend.map(\.points).max() ?? 0, 1)
+        let roundedTop = Int(ceil(Double(maxValue) / 10.0) * 10.0)
+        let mid = max(roundedTop / 2, 1)
+        return [roundedTop, mid, 0]
     }
 
     private var streakVisualProgress: CGFloat {
@@ -486,34 +514,347 @@ struct HomeView: View {
         trend.max(by: { $0.points < $1.points }) ?? selectedPoint
     }
 
+    private var streakHeadline: String {
+        "\(appState.user.streakDays) дней в eco-ритме"
+    }
+
+    private var streakAccentText: String {
+        appState.user.streakDays >= 14 ? "Зелёная привычка уже с тобой" : "Маленькие шаги уже работают"
+    }
+
     private var impactSummaryText: String {
         if let challenge = nextChallenge {
             return challengeRemainingSteps > 0
-                ? "Добавь ещё \(challengeRemainingSteps) активн. и закрой «\(challenge.title)»."
-                : "Челлендж «\(challenge.title)» уже готов к получению награды."
+                ? "Ещё \(challengeRemainingSteps) шаг\(challengeRemainingSteps == 1 ? "" : (challengeRemainingSteps < 5 ? "а" : "ов")) до «\(challenge.title)»"
+                : "Награда «\(challenge.title)» уже готова"
         }
-        return "Здесь собраны подсказки, что лучше сделать следующим шагом, чтобы сохранить темп."
+        return "Короткий фокус на сегодня"
     }
 
     private var impactItems: [ImpactCardModel] {
         return [
             ImpactCardModel(
                 value: suggestedCategoryTitle,
-                title: "Попробуй сегодня",
-                subtitle: "Категория, которую стоит прокачать следующей",
+                title: "Фокус дня",
+                subtitle: "Самый логичный следующий шаг",
                 icon: "sparkles",
                 tint: Color(hex: 0x11A7D8),
                 background: Color(hex: 0xE6F7FF)
             ),
             ImpactCardModel(
                 value: weeklyBestDay.points > 0 ? "\(weeklyBestDay.points) очк." : "0",
-                title: "Лучший день недели",
-                subtitle: weeklyBestDay.points > 0 ? "\(weeklyBestDay.day) был самым продуктивным" : "Пока нет дня с активностью",
+                title: "Пик недели",
+                subtitle: weeklyBestDay.points > 0 ? "\(weeklyBestDay.day) дал лучший результат" : "Активный день ещё впереди",
                 icon: "chart.line.uptrend.xyaxis",
                 tint: Color(hex: 0xE7A700),
                 background: Color(hex: 0xFFF9E6)
             )
         ]
+    }
+
+    @ViewBuilder
+    private func profileHeader(compactLayout: Bool, avatarSize: CGFloat) -> some View {
+        if compactLayout {
+            VStack(alignment: .leading, spacing: 10) {
+                profileButton(avatarSize: avatarSize, alignTop: false)
+            }
+        } else {
+            profileButton(avatarSize: avatarSize, alignTop: true)
+        }
+    }
+
+    private func profileButton(avatarSize: CGFloat, alignTop: Bool) -> some View {
+        Button {
+            selectedTab = 4
+        } label: {
+            HStack(alignment: alignTop ? .top : .center) {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(EcoTheme.avatarFill)
+                        .frame(width: avatarSize, height: avatarSize)
+                        .overlay(
+                            Text(initials(from: appState.user.fullName))
+                                .font(EcoTypography.title2)
+                                .foregroundStyle(.white)
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(appState.user.fullName)
+                            .font(EcoTypography.title1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        PillBadge(
+                            icon: "trophy.fill",
+                            text: appState.user.level.rawValue,
+                            foreground: EcoTheme.ink,
+                            background: EcoTheme.elevatedCard.opacity(0.82)
+                        )
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func heroPointsCard(heroValueFont: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Всего эко-очков")
+                .font(EcoTypography.title2)
+                .foregroundStyle(.white.opacity(0.92))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(appState.user.points)")
+                    .font(Font.system(size: heroValueFont, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("очк.")
+                    .font(EcoTypography.title1)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+
+            VStack(spacing: 8) {
+                HStack {
+                    Text(levelInfo.name)
+                        .font(EcoTypography.headline)
+                        .foregroundStyle(.white.opacity(0.9))
+                    Spacer()
+                    Text("\(Int(levelInfo.progress * 100))%")
+                        .font(EcoTypography.headline)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.black.opacity(0.18))
+                            .frame(height: 14)
+                        Capsule()
+                            .fill(Color(hex: 0xFFD500))
+                            .frame(width: heroProgress * geo.size.width, height: 14)
+                    }
+                }
+                .frame(height: 14)
+
+                Text(levelInfo.remaining > 0
+                     ? "\(levelInfo.remaining) очк. до следующего уровня"
+                     : "Максимальный уровень достигнут")
+                .font(EcoTypography.subheadline)
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color(hex: 0x43CF68), Color(hex: 0x4DC172)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: EcoTheme.primary.opacity(0.22), radius: 14, y: 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.15), lineWidth: 1)
+        )
+        .opacity(contentVisible ? 1 : 0)
+        .offset(y: contentVisible ? 0 : 16)
+        .animation(.spring(response: 0.55, dampingFraction: 0.82), value: contentVisible)
+    }
+
+    private var streakOverviewCard: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Circle()
+                .fill(Color(hex: 0xFFF0E3))
+                .frame(width: 54, height: 54)
+                .overlay(
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: streakFlameSize, weight: .bold))
+                        .foregroundStyle(Color(hex: 0xF97316))
+                        .shadow(color: Color(hex: 0xF97316).opacity(streakFlameGlow), radius: 10, y: 0)
+                        .scaleEffect(1 + streakVisualProgress * 0.12)
+                        .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appState.user.streakDays)
+                )
+                .shadow(color: Color(hex: 0xF97316).opacity(streakFlameGlow * 0.55), radius: 12, y: 0)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(streakHeadline)
+                    .font(EcoTypography.headline)
+                    .foregroundStyle(EcoTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+                Text(streakAccentText)
+                    .font(EcoTypography.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.08), radius: 10, y: 5)
+        .opacity(contentVisible ? 1 : 0)
+        .offset(y: contentVisible ? 0 : 14)
+        .animation(.easeOut(duration: 0.36).delay(0.05), value: contentVisible)
+    }
+
+    private var nextStepsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Что дальше")
+                    .font(EcoTypography.title1)
+                    .foregroundStyle(EcoTheme.ink)
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(EcoTheme.primary)
+                Text(impactSummaryText)
+                    .font(EcoTypography.footnote)
+                    .foregroundStyle(EcoTheme.ink.opacity(0.84))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.88)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(EcoTheme.elevatedCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(EcoTheme.surfaceStroke, lineWidth: 1)
+            )
+        }
+        .padding(.top, 2)
+    }
+
+    private var impactCardsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ForEach(Array(impactItems.enumerated()), id: \.offset) { index, item in
+                ImpactCard(item: item)
+                    .opacity(contentVisible ? 1 : 0)
+                    .offset(y: contentVisible ? 0 : 20)
+                    .animation(
+                        .spring(response: 0.58, dampingFraction: 0.84).delay(0.08 * Double(index)),
+                        value: contentVisible
+                    )
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var trendRangePicker: some View {
+        HStack(spacing: 6) {
+            ForEach([TrendRange.week, .month], id: \.rawValue) { range in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTrendRange = range
+                        selectedTrendIndex = range == .week ? 6 : 3
+                    }
+                } label: {
+                    Text(range.rawValue)
+                        .font(EcoTypography.footnote)
+                        .foregroundStyle(selectedTrendRange == range ? .white : .secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(selectedTrendRange == range ? EcoTheme.primary : Color.white.opacity(0.8))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(4)
+        .background(Color.white.opacity(0.7), in: Capsule())
+    }
+
+    private var activityTrendSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Динамика активностей")
+                    .font(EcoTypography.title2)
+                Spacer()
+            }
+
+            trendRangePicker
+
+            HStack(alignment: .top, spacing: 6) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text("баллы")
+                        .font(EcoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 6)
+                    ForEach(Array(trendAxisValues.enumerated()), id: \.offset) { index, value in
+                        Text("\(value)")
+                            .font(EcoTypography.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(height: index == trendAxisValues.count - 1 ? 26 : 62, alignment: .topTrailing)
+                    }
+                }
+                .frame(width: 38, alignment: .trailing)
+                .padding(.top, 8)
+
+                TrendChart(
+                    points: trend.map(\.points),
+                    axisValues: trendAxisValues,
+                    selectedIndex: $selectedTrendIndex,
+                    progress: chartProgress
+                )
+                .frame(height: 190)
+            }
+
+            HStack(spacing: 6) {
+                Color.clear
+                    .frame(width: 38)
+
+                HStack {
+                    ForEach(Array(trend.enumerated()), id: \.offset) { index, point in
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                selectedTrendIndex = index
+                            }
+                        } label: {
+                            Text(point.day)
+                                .font(selectedTrendIndex == index ? EcoTypography.headline : EcoTypography.subheadline)
+                                .foregroundStyle(selectedTrendIndex == index ? EcoTheme.primary : .secondary)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+
+            HStack {
+                Text(selectedPoint.day)
+                    .font(EcoTypography.title2)
+                Spacer()
+                Text("\(selectedPoint.points) баллов")
+                    .font(EcoTypography.headline)
+                    .foregroundStyle(EcoTheme.primary)
+            }
+            .padding()
+            .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
+        .opacity(contentVisible ? 1 : 0)
+        .offset(y: contentVisible ? 0 : 20)
+        .animation(.easeOut(duration: 0.45).delay(0.12), value: contentVisible)
     }
 
     var body: some View {
@@ -528,289 +869,30 @@ struct HomeView: View {
                     EcoBackground()
 
                     VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Group {
-                                if compactLayout {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Button {
-                                        selectedTab = 4
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Circle()
-                                                .fill(EcoTheme.avatarFill)
-                                                .frame(width: avatarSize, height: avatarSize)
-                                                .overlay(
-                                                    Text(initials(from: appState.user.fullName))
-                                                        .font(EcoTypography.title2)
-                                                        .foregroundStyle(.white)
-                                                )
-                                                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-
-                                            VStack(alignment: .leading, spacing: 8) {
-                                                Text(appState.user.fullName)
-                                                    .font(EcoTypography.title1)
-                                                    .lineLimit(1)
-                                                    .minimumScaleFactor(0.7)
-                                                PillBadge(
-                                                    icon: "trophy.fill",
-                                                    text: appState.user.level.rawValue,
-                                                    foreground: EcoTheme.ink,
-                                                    background: EcoTheme.elevatedCard.opacity(0.82)
-                                                )
-                                            }
-                                            Spacer(minLength: 0)
-                                        }
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-
-                                }
-                                } else {
-                                Button {
-                                    selectedTab = 4
-                                } label: {
-                                    HStack(alignment: .top) {
-                                        HStack(spacing: 12) {
-                                            Circle()
-                                                .fill(EcoTheme.avatarFill)
-                                                .frame(width: avatarSize, height: avatarSize)
-                                                .overlay(
-                                                    Text(initials(from: appState.user.fullName))
-                                                        .font(EcoTypography.title2)
-                                                        .foregroundStyle(.white)
-                                                )
-                                                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-
-                                            VStack(alignment: .leading, spacing: 8) {
-                                                Text(appState.user.fullName)
-                                                    .font(EcoTypography.title1)
-                                                    .lineLimit(1)
-                                                    .minimumScaleFactor(0.7)
-                                                PillBadge(
-                                                    icon: "trophy.fill",
-                                                    text: appState.user.level.rawValue,
-                                                    foreground: EcoTheme.ink,
-                                                    background: EcoTheme.elevatedCard.opacity(0.82)
-                                                )
-                                            }
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            }
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 10)
-                        .animation(.easeOut(duration: 0.36), value: contentVisible)
+                        profileHeader(compactLayout: compactLayout, avatarSize: avatarSize)
+                            .opacity(contentVisible ? 1 : 0)
+                            .offset(y: contentVisible ? 0 : 10)
+                            .animation(.easeOut(duration: 0.36), value: contentVisible)
 
                         ScrollView {
                             VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Всего эко-очков")
-                                .font(EcoTypography.title2)
-                                .foregroundStyle(.white.opacity(0.92))
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text("\(appState.user.points)")
-                                    .font(Font.system(size: heroValueFont, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                Text("очк.")
-                                    .font(EcoTypography.title1)
-                                    .foregroundStyle(.white.opacity(0.8))
+                                heroPointsCard(heroValueFont: heroValueFont)
+
+                                streakOverviewCard
+
+                                nextStepsSection
+
+                                impactCardsGrid
+
+                                activityTrendSection
                             }
-
-                            VStack(spacing: 8) {
-                                HStack {
-                                    Text(levelInfo.name)
-                                        .font(EcoTypography.headline)
-                                        .foregroundStyle(.white.opacity(0.9))
-                                    Spacer()
-                                    Text("\(Int(levelInfo.progress * 100))%")
-                                        .font(EcoTypography.headline)
-                                        .foregroundStyle(.white.opacity(0.9))
-                                }
-
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        Capsule()
-                                            .fill(Color.black.opacity(0.18))
-                                            .frame(height: 14)
-                                        Capsule()
-                                            .fill(Color(hex: 0xFFD500))
-                                            .frame(width: heroProgress * geo.size.width, height: 14)
-                                    }
-                                }
-                                .frame(height: 14)
-
-                                Text(levelInfo.remaining > 0
-                                     ? "\(levelInfo.remaining) очк. до следующего уровня"
-                                     : "Максимальный уровень достигнут")
-                                .font(EcoTypography.subheadline)
-                                .foregroundStyle(.white.opacity(0.75))
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            }
-                        }
-                        .padding(20)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: 0x43CF68), Color(hex: 0x4DC172)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        .shadow(color: EcoTheme.primary.opacity(0.22), radius: 14, y: 8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                .stroke(.white.opacity(0.15), lineWidth: 1)
-                        )
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 16)
-                        .animation(.spring(response: 0.55, dampingFraction: 0.82), value: contentVisible)
-
-                        HStack(spacing: 12) {
-                            Circle()
-                                .fill(Color(hex: 0xFFF0E3))
-                                .frame(width: 54, height: 54)
-                                .overlay(
-                                    Image(systemName: "flame.fill")
-                                        .font(.system(size: streakFlameSize, weight: .bold))
-                                        .foregroundStyle(Color(hex: 0xF97316))
-                                        .shadow(color: Color(hex: 0xF97316).opacity(streakFlameGlow), radius: 10, y: 0)
-                                        .scaleEffect(1 + streakVisualProgress * 0.12)
-                                        .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appState.user.streakDays)
-                                )
-                                .shadow(color: Color(hex: 0xF97316).opacity(streakFlameGlow * 0.55), radius: 12, y: 0)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Серия: \(appState.user.streakDays) \(dayWord(for: appState.user.streakDays)) подряд")
-                                    .font(EcoTypography.title2)
-                                    .foregroundStyle(EcoTheme.ink)
-                                Text("Отличный темп. Сегодня сэкономим электроэнергию: выключи лишний свет.")
-                                    .font(EcoTypography.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(3)
-                            }
-                            Spacer()
-                        }
-                        .padding(16)
-                        .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .shadow(color: .black.opacity(0.08), radius: 10, y: 5)
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 14)
-                        .animation(.easeOut(duration: 0.36).delay(0.05), value: contentVisible)
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("Что дальше")
-                                    .font(EcoTypography.title1)
-                                    .foregroundStyle(EcoTheme.ink)
-                                Spacer()
-                            }
-
-                            HStack(spacing: 10) {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(EcoTheme.primary)
-                                Text(impactSummaryText)
-                                    .font(EcoTypography.footnote)
-                                    .foregroundStyle(EcoTheme.ink.opacity(0.84))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(EcoTheme.elevatedCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(EcoTheme.surfaceStroke, lineWidth: 1)
-                            )
-                        }
-                        .padding(.top, 2)
-
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                            ForEach(Array(impactItems.enumerated()), id: \.offset) { index, item in
-                                ImpactCard(item: item)
-                                    .opacity(contentVisible ? 1 : 0)
-                                    .offset(y: contentVisible ? 0 : 20)
-                                    .animation(
-                                        .spring(response: 0.58, dampingFraction: 0.84).delay(0.08 * Double(index)),
-                                        value: contentVisible
-                                    )
-                            }
-                        }
-                        .padding(.bottom, 4)
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Text("Динамика активностей")
-                                    .font(EcoTypography.title2)
-                                Spacer()
-                                Text("Последние 6 дней")
-                                    .font(EcoTypography.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-
-                            TrendChart(
-                                points: trend.map(\.points),
-                                selectedIndex: $selectedTrendIndex,
-                                progress: chartProgress
-                            )
-                            .frame(height: 190)
-
-                            HStack {
-                                ForEach(Array(trend.enumerated()), id: \.offset) { index, point in
-                                    Button {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                            selectedTrendIndex = index
-                                        }
-                                    } label: {
-                                        Text(point.day)
-                                            .font(selectedTrendIndex == index ? EcoTypography.headline : EcoTypography.subheadline)
-                                            .foregroundStyle(selectedTrendIndex == index ? EcoTheme.primary : .secondary)
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-
-                            HStack {
-                                Text(selectedPoint.day)
-                                    .font(EcoTypography.title2)
-                                Spacer()
-                                Text("очки: \(selectedPoint.points)")
-                                    .font(EcoTypography.headline)
-                                    .foregroundStyle(EcoTheme.primary)
-                            }
-                            .padding()
-                            .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        }
-                        .padding(14)
-                        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(Color.white.opacity(0.6), lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 20)
-                        .animation(.easeOut(duration: 0.45).delay(0.12), value: contentVisible)
-
-                        }
-                        .padding(.horizontal, compactLayout ? 14 : 16)
+                            .padding(.horizontal, compactLayout ? 14 : 16)
                             .padding(.bottom, 80)
                         }
                     }
                     .padding(.horizontal, compactLayout ? 14 : 16)
                     .padding(.top, compactLayout ? 10 : 12)
                 }
-            }
             }
             .navigationBarHidden(true)
         }
@@ -829,6 +911,9 @@ struct HomeView: View {
                 chartProgress = 1
             }
         }
+        .onChange(of: selectedTrendRange) { _, newValue in
+            selectedTrendIndex = newValue == .week ? 6 : 3
+        }
     }
 
     private func initials(from name: String) -> String {
@@ -837,16 +922,6 @@ struct HomeView: View {
         return String(chars).uppercased()
     }
 
-    private func dayWord(for count: Int) -> String {
-        let lastTwo = count % 100
-        let last = count % 10
-        if (11...14).contains(lastTwo) { return "дней" }
-        switch last {
-        case 1: return "день"
-        case 2...4: return "дня"
-        default: return "дней"
-        }
-    }
 }
 
 struct ChallengesView: View {
@@ -1005,6 +1080,8 @@ struct AddActivityView: View {
     @State private var activityNote = ""
     @State private var customTitle = ""
     @State private var customDescription = ""
+    @State private var showActivitySavedOverlay = false
+    @State private var savedOverlayText = "Активность сохранена"
 
     private var quickCategories: [ActivityCategory] {
         [.transport, .water, .plastic, .waste, .energy, .custom]
@@ -1053,11 +1130,6 @@ struct AddActivityView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                     .buttonStyle(.plain)
-
-                                    Text(title(for: selectedCategory))
-                                        .font(EcoTypography.title2)
-                                        .foregroundStyle(.white)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .padding(.horizontal, 2)
 
@@ -1370,42 +1442,25 @@ struct AddActivityView: View {
                                         .font(EcoTypography.subheadline)
                                         .foregroundStyle(.secondary)
 
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [Color.white, Color(hex: 0xF7FBF9)],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
-                                            )
-                                            .shadow(color: .black.opacity(0.05), radius: 14, y: 8)
-
-                                        LazyVGrid(
-                                            columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)],
-                                            spacing: 14
-                                        ) {
-                                            ForEach(quickCategories) { category in
-                                                AddCategoryTile(
-                                                    title: category.rawValue,
-                                                    subtitle: category.shortDescription,
-                                                    icon: category.systemIconName,
-                                                    tint: category.tintColor,
-                                                    gradient: category.highlightGradient,
-                                                    isSelected: false
-                                                ) {
-                                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                                                        selectedTransportTemplate = nil
-                                                        selectedCategory = category
-                                                    }
+                                    LazyVGrid(
+                                        columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)],
+                                        spacing: 14
+                                    ) {
+                                        ForEach(quickCategories) { category in
+                                            AddCategoryTile(
+                                                title: category.rawValue,
+                                                subtitle: category.shortDescription,
+                                                icon: category.systemIconName,
+                                                tint: category.tintColor,
+                                                gradient: category.highlightGradient,
+                                                isSelected: false
+                                            ) {
+                                                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                                    selectedTransportTemplate = nil
+                                                    selectedCategory = category
                                                 }
                                             }
                                         }
-                                        .padding(16)
                                     }
                                 }
                                 .surfaceCard()
@@ -1414,6 +1469,12 @@ struct AddActivityView: View {
                         .padding()
                         .padding(.bottom, 80)
                     }
+                }
+
+                if showActivitySavedOverlay {
+                    ActivitySavedOverlay(text: savedOverlayText)
+                        .transition(.asymmetric(insertion: .scale(scale: 0.88).combined(with: .opacity), removal: .opacity))
+                        .zIndex(10)
                 }
             }
             .navigationBarHidden(true)
@@ -1467,7 +1528,19 @@ struct AddActivityView: View {
             shareToNews: shareToNews
         )
         if success {
-            dismiss()
+            await MainActor.run {
+                savedOverlayText = shareToNews ? "Активность и пост готовы" : "Активность сохранена"
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
+                    showActivitySavedOverlay = true
+                }
+                EcoFeedback.playActivitySaved()
+            }
+
+            try? await Task.sleep(for: .milliseconds(1050))
+
+            await MainActor.run {
+                dismiss()
+            }
         }
     }
 
@@ -1492,35 +1565,44 @@ struct AddActivityView: View {
 
     private func estimateCustomImpact(title: String, description: String) -> (co2: Double, points: Int) {
         let combined = "\(title) \(description)".lowercased()
-        var score = 6
-        var co2 = 0.18
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        var score = 4
+        var co2 = 0.12
 
-        if combined.contains("велосип") || combined.contains("пеш") || combined.contains("метро") || combined.contains("автобус") {
-            score += 5
-            co2 += 0.55
-        }
-        if combined.contains("сортир") || combined.contains("переработ") || combined.contains("вторсыр") || combined.contains("мусор") {
+        if combined.contains("велосип") || combined.contains("пеш") || combined.contains("метро") || combined.contains("автобус") || combined.contains("поезд") || combined.contains("самокат") {
             score += 4
-            co2 += 0.35
+            co2 += 0.42
         }
-        if combined.contains("бутыл") || combined.contains("сумк") || combined.contains("упаков") || combined.contains("пластик") {
+        if combined.contains("сортир") || combined.contains("переработ") || combined.contains("вторсыр") || combined.contains("мусор") || combined.contains("компост") {
             score += 3
-            co2 += 0.22
+            co2 += 0.28
         }
-        if combined.contains("душ") || combined.contains("кран") || combined.contains("вода") {
-            score += 3
-            co2 += 0.18
+        if combined.contains("бутыл") || combined.contains("сумк") || combined.contains("упаков") || combined.contains("пластик") || combined.contains("многораз") {
+            score += 2
+            co2 += 0.16
+        }
+        if combined.contains("душ") || combined.contains("кран") || combined.contains("вода") || combined.contains("утеч") {
+            score += 2
+            co2 += 0.14
         }
         if combined.contains("свет") || combined.contains("ламп") || combined.contains("электр") || combined.contains("заряд") {
-            score += 3
-            co2 += 0.2
-        }
-        if description.trimmingCharacters(in: .whitespacesAndNewlines).count > 80 {
             score += 2
-            co2 += 0.08
+            co2 += 0.16
+        }
+        if combined.contains("вместо") || combined.contains("отказ") || combined.contains("замен") || combined.contains("сэконом") {
+            score += 2
+            co2 += 0.1
+        }
+        if trimmedDescription.count > 90 {
+            score += 1
+            co2 += 0.06
+        }
+        if trimmedDescription.count < 28 {
+            score = min(score, 6)
+            co2 = min(co2, 0.22)
         }
 
-        return (round(min(co2, 1.4) * 100) / 100, min(score, 18))
+        return (round(min(co2, 1.1) * 100) / 100, min(score, 14))
     }
 
     private func title(for category: ActivityCategory) -> String {
@@ -1535,44 +1617,127 @@ struct AddActivityView: View {
     }
 
     private func subIcon(for category: ActivityCategory, title: String) -> String {
+        let normalized = title.lowercased()
         switch category {
         case .transport:
-            if title.contains("Пеш") { return "figure.walk" }
-            if title.contains("Метро") { return "tram.fill" }
-            if title.contains("Поезд") { return "train.side.front.car" }
-            if title.contains("Велосипед") { return "bicycle" }
-            if title.contains("Самокат") { return "scooter" }
-            if title.contains("Мотоцикл") { return "motorcycle" }
-            if title.contains("Машина") { return "car.fill" }
-            if title.contains("Автобус") || title.contains("Общ.") { return "bus.fill" }
-            if title.contains("Совмест") { return "person.2.wave.2.fill" }
+            if normalized.contains("пеш") { return "figure.walk" }
+            if normalized.contains("метро") { return "tram.fill" }
+            if normalized.contains("поезд") { return "train.side.front.car" }
+            if normalized.contains("велосипед") { return "bicycle" }
+            if normalized.contains("самокат") { return "scooter" }
+            if normalized.contains("мотоцикл") { return "motorcycle" }
+            if normalized.contains("машина") { return "car.fill" }
+            if normalized.contains("автобус") || normalized.contains("общ.") { return "bus.fill" }
+            if normalized.contains("совмест") { return "person.2.fill" }
             return "bicycle"
         case .water:
-            if title.contains("душ") { return "shower.fill" }
-            if title.contains("кран") { return "faucet.fill" }
-            if title.contains("стирк") { return "washer.fill" }
-            if title.contains("утеч") { return "wrench.adjustable.fill" }
-            if title.contains("аэратор") { return "aqi.medium" }
+            if normalized.contains("душ") { return "shower.fill" }
+            if normalized.contains("кран") { return "drop.fill" }
+            if normalized.contains("стирк") { return "washer.fill" }
+            if normalized.contains("утеч") { return "wrench.adjustable.fill" }
+            if normalized.contains("аэратор") { return "circle.grid.3x3.fill" }
             return "drop.fill"
         case .plastic:
-            if title.contains("пакета") { return "takeoutbag.and.cup.and.straw.fill" }
-            if title.contains("сумка") { return "bag.fill" }
-            if title.contains("бутылка") { return "waterbottle.fill" }
-            if title.contains("сдал") { return "arrow.triangle.2.circlepath" }
+            if normalized.contains("пакета") { return "takeoutbag.and.cup.and.straw.fill" }
+            if normalized.contains("сумка") { return "bag.fill" }
+            if normalized.contains("бутылка") { return "waterbottle.fill" }
+            if normalized.contains("сдал") { return "arrow.triangle.2.circlepath" }
             return "takeoutbag.and.cup.and.straw.fill"
         case .waste:
-            if title.contains("Сортировка") { return "square.3.layers.3d.down.right.fill" }
-            if title.contains("вторсыр") || title.contains("переработ") { return "arrow.triangle.2.circlepath.circle.fill" }
-            if title.contains("Компост") { return "leaf.fill" }
+            if normalized.contains("сортиров") { return "arrow.triangle.2.circlepath" }
+            if normalized.contains("вторсыр") || normalized.contains("переработ") { return "arrow.triangle.2.circlepath.circle" }
+            if normalized.contains("компост") { return "leaf.fill" }
             return "arrow.triangle.2.circlepath"
         case .energy:
-            if title.contains("Выключил") { return "lightbulb.slash.fill" }
-            if title.contains("Отключил") { return "powerplug.fill" }
-            if title.contains("LED") { return "lightbulb.led.fill" }
-            if title.contains("дневной") { return "sun.max.fill" }
+            if normalized.contains("выключил") { return "lightbulb.slash.fill" }
+            if normalized.contains("отключил") { return "powerplug.fill" }
+            if normalized.contains("led") { return "lightbulb.led.fill" }
+            if normalized.contains("дневной") { return "sun.max.fill" }
             return "bolt.badge.a.fill"
         case .custom:
             return "sparkles"
+        }
+    }
+}
+
+private struct ActivitySavedOverlay: View {
+    let text: String
+    @State private var badgeScale: CGFloat = 0.72
+    @State private var glowOpacity = 0.0
+    @State private var capsuleWidth: CGFloat = 0.86
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.12)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color(hex: 0xDDF7C8), Color.white.opacity(0.08)],
+                                center: .center,
+                                startRadius: 8,
+                                endRadius: 78
+                            )
+                        )
+                        .frame(width: 132, height: 132)
+                        .opacity(glowOpacity)
+
+                    ForEach(0..<8, id: \.self) { index in
+                        Capsule()
+                            .fill(Color.white.opacity(0.9))
+                            .frame(width: 5, height: 22)
+                            .offset(y: -78)
+                            .rotationEffect(.degrees(Double(index) * 45))
+                            .opacity(glowOpacity)
+                    }
+
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: 0x66D94D), Color(hex: 0x22B96B)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 84, height: 84)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 34, weight: .black))
+                                .foregroundStyle(.white)
+                        )
+                        .scaleEffect(badgeScale)
+                        .shadow(color: EcoTheme.primary.opacity(0.28), radius: 16, y: 8)
+                }
+
+                Text("Готово")
+                    .font(EcoTypography.title1)
+                    .foregroundStyle(EcoTheme.ink)
+
+                Text(text)
+                    .font(EcoTypography.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 26)
+            .padding(.vertical, 24)
+            .frame(maxWidth: 270)
+            .background(EcoTheme.elevatedCard, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(EcoTheme.softStroke, lineWidth: 1)
+                    .scaleEffect(capsuleWidth)
+                    .opacity(glowOpacity * 0.7)
+            )
+            .onAppear {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.74)) {
+                    badgeScale = 1
+                    glowOpacity = 1
+                    capsuleWidth = 1
+                }
+            }
         }
     }
 }
@@ -3119,11 +3284,11 @@ private struct AddSubactivityTile: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.10))
+                    .fill(Color.white.opacity(0.14))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.24), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -3167,33 +3332,35 @@ private struct ImpactCard: View {
     @State private var tapPulse = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             Image(systemName: item.icon)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(item.tint)
-                .frame(width: 40, height: 40)
+                .frame(width: 38, height: 38)
                 .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .scaleEffect(tapPulse ? 1.08 : 1)
                 .animation(.spring(response: 0.22, dampingFraction: 0.6), value: tapPulse)
 
             Text(item.value)
-                .font(Font.system(size: 22, weight: .heavy, design: .rounded))
+                .font(Font.system(size: 20, weight: .heavy, design: .rounded))
                 .foregroundStyle(EcoTheme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(item.title)
-                .font(EcoTypography.headline)
+                .font(EcoTypography.subheadline)
                 .foregroundStyle(EcoTheme.ink)
                 .lineLimit(2)
+                .minimumScaleFactor(0.9)
             Text(item.subtitle)
                 .font(EcoTypography.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+                .minimumScaleFactor(0.88)
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 144, alignment: .topLeading)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 14)
+        .frame(minHeight: 136, alignment: .topLeading)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
         .background(item.background.opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -3212,6 +3379,7 @@ private struct ImpactCard: View {
 
 private struct TrendChart: View {
     let points: [Int]
+    let axisValues: [Int]
     @Binding var selectedIndex: Int
     let progress: CGFloat
 
@@ -3222,8 +3390,14 @@ private struct TrendChart: View {
             let horizontalInset: CGFloat = 12
             let chartWidth = max(frame.width - horizontalInset * 2, 1)
             ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.35))
+                ForEach(Array(axisValues.enumerated()), id: \.offset) { index, _ in
+                    let y = 8 + CGFloat(index) * ((frame.height - 34) / CGFloat(max(axisValues.count - 1, 1)))
+                    Path { path in
+                        path.move(to: CGPoint(x: horizontalInset, y: y))
+                        path.addLine(to: CGPoint(x: frame.width - horizontalInset, y: y))
+                    }
+                    .stroke(Color.white.opacity(index == axisValues.count - 1 ? 0.2 : 0.45), style: StrokeStyle(lineWidth: 1, dash: [5, 6]))
+                }
 
                 TrendAreaShape(values: points, horizontalInset: horizontalInset)
                     .trim(from: 0, to: progress)

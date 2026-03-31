@@ -58,6 +58,11 @@ private struct LevelUpCelebrationOverlay: View {
     @State private var badgeScale: CGFloat = 0.6
     @State private var glowOpacity = 0.0
     @State private var contentOffset: CGFloat = 24
+    @State private var ringScale: CGFloat = 0.76
+    @State private var cardScale: CGFloat = 0.92
+    @State private var iconRotation: Double = -16
+    @State private var particleOffset: CGFloat = 18
+    @State private var particleOpacity = 0.0
 
     var body: some View {
         ZStack {
@@ -71,6 +76,18 @@ private struct LevelUpCelebrationOverlay: View {
             VStack(spacing: 18) {
                 ZStack {
                     Circle()
+                        .stroke(Color.white.opacity(0.28), lineWidth: 2)
+                        .frame(width: 212, height: 212)
+                        .scaleEffect(ringScale)
+                        .opacity(glowOpacity * 0.75)
+
+                    Circle()
+                        .stroke(Color(hex: 0xF7C300).opacity(0.34), lineWidth: 14)
+                        .frame(width: 160, height: 160)
+                        .scaleEffect(1.08 + glowOpacity * 0.06)
+                        .blur(radius: 1.5)
+
+                    Circle()
                         .fill(
                             RadialGradient(
                                 colors: [Color(hex: 0xFFF2B8), Color.white.opacity(0.18)],
@@ -82,13 +99,22 @@ private struct LevelUpCelebrationOverlay: View {
                         .frame(width: 176, height: 176)
                         .scaleEffect(1 + glowOpacity * 0.06)
 
-                    ForEach(0..<10, id: \.self) { index in
+                    ForEach(0..<12, id: \.self) { index in
                         Capsule()
                             .fill(Color.white.opacity(0.88))
-                            .frame(width: 6, height: 24)
-                            .offset(y: -112)
+                            .frame(width: 6, height: 28)
+                            .offset(y: -118)
                             .rotationEffect(.degrees(Double(index) * 36))
                             .opacity(glowOpacity)
+                    }
+
+                    ForEach(0..<10, id: \.self) { index in
+                        Image(systemName: index.isMultiple(of: 2) ? "sparkles" : "leaf.fill")
+                            .font(.system(size: index.isMultiple(of: 2) ? 16 : 12, weight: .bold))
+                            .foregroundStyle(index.isMultiple(of: 2) ? Color.white : Color(hex: 0xD7F4BD))
+                            .offset(y: -118 - particleOffset)
+                            .rotationEffect(.degrees(Double(index) * 36))
+                            .opacity(particleOpacity)
                     }
 
                     Circle()
@@ -106,18 +132,19 @@ private struct LevelUpCelebrationOverlay: View {
                                 .foregroundStyle(Color.white)
                         )
                         .scaleEffect(badgeScale)
+                        .rotationEffect(.degrees(iconRotation))
                         .shadow(color: Color(hex: 0xF7B500).opacity(0.35), radius: 20, y: 10)
                 }
 
                 VStack(spacing: 8) {
-                    Text("Поздравляем!")
+                    Text("Новый ранг открыт")
                         .font(EcoTypography.largeTitle)
                         .foregroundStyle(EcoTheme.ink)
                     Text("Ты теперь \(level.rawValue)")
                         .font(EcoTypography.title2)
                         .foregroundStyle(EcoTheme.ink)
                         .multilineTextAlignment(.center)
-                    Text("Новый уровень открыт. Продолжай выполнять экодействия и забирай новые челленджи.")
+                    Text("Сильный апгрейд. Твой eco-вклад уже заметно вырос, и это только начало.")
                         .font(EcoTypography.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -142,11 +169,21 @@ private struct LevelUpCelebrationOverlay: View {
                     .stroke(EcoTheme.softStroke, lineWidth: 1)
             )
             .padding(.horizontal, 28)
+            .scaleEffect(cardScale)
             .onAppear {
+                EcoFeedback.playLevelUp()
                 withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) {
                     badgeScale = 1.0
                     glowOpacity = 1.0
                     contentOffset = 0
+                    ringScale = 1.0
+                    cardScale = 1.0
+                    iconRotation = 0
+                    particleOpacity = 1.0
+                    particleOffset = 0
+                }
+                withAnimation(.easeOut(duration: 0.9).delay(0.08)) {
+                    ringScale = 1.08
                 }
             }
         }
