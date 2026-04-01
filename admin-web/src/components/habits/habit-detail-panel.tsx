@@ -48,6 +48,7 @@ export function HabitDetailPanel({
         description: `Изменения для "${updated.title}" сохранены.`,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.habits.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.habits.metrics });
     },
     onError: () => {
       showToast({

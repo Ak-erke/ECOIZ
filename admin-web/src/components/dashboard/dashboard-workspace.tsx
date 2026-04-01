@@ -59,6 +59,13 @@ export function DashboardWorkspace({
   initialUsers,
   initialAchievements,
 }: DashboardWorkspaceProps) {
+  const postStateLabels: Record<CommunityPost["state"], string> = {
+    Published: "Опубликован",
+    Flagged: "Отмечен",
+    "Needs review": "Нужна проверка",
+    Hidden: "Скрыт",
+  };
+
   const userMetricsQuery = useQuery({
     queryKey: queryKeys.users.metrics,
     queryFn: getAdminUserMetrics,
@@ -181,7 +188,9 @@ export function DashboardWorkspace({
     {
       label: "Посты на модерации",
       value: String(
-        postMetrics.flaggedPosts + users.filter((u) => u.status === "REVIEW").length,
+        posts.filter(
+          (post) => post.state === "Flagged" || post.state === "Needs review",
+        ).length,
       ),
       note: `${postMetrics.flaggedPosts} отмечено, ${postMetrics.totalReports} жалоб`,
     },
@@ -196,7 +205,7 @@ export function DashboardWorkspace({
     .filter((post) => post.state === "Flagged" || post.state === "Needs review")
     .map((post) => ({
       label: `Пост от ${post.author}`,
-      status: post.state,
+      status: postStateLabels[post.state],
       owner: "Модератор",
     }));
 
@@ -220,9 +229,9 @@ export function DashboardWorkspace({
 
   const recentItems = [
     `${postMetrics.flaggedPosts} постов сейчас отмечены для модерации`,
-    `${userMetrics.adminCount} админов и модераторов имеют расширенный доступ`,
+    `${userMetrics.adminCount} пользователей имеют расширенный доступ`,
     `${habitMetrics.totalHabits} активностей доступны в каталоге`,
-    `${achievementMetrics.maxTargetValue} — текущий максимальный target у ачивок`,
+    `${achievementMetrics.maxTargetValue} — текущий максимальный порог у ачивок`,
   ];
 
   return (

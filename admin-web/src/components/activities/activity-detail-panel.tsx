@@ -25,6 +25,8 @@ export function ActivityDetailPanel({ activity }: ActivityDetailPanelProps) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
       await queryClient.invalidateQueries({ queryKey: queryKeys.activities.metrics });
       await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(activity.userId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.metrics });
     },
     onError: () => {
       showToast({
@@ -76,7 +78,7 @@ export function ActivityDetailPanel({ activity }: ActivityDetailPanelProps) {
         </div>
         <div className="detail-row">
           <span className="muted">Сэкономлено CO2</span>
-          <strong>{activity.co2Saved.toFixed(1)} kg</strong>
+          <strong>{activity.co2Saved.toFixed(1)} кг</strong>
         </div>
         <div className="detail-row">
           <span className="muted">Создано</span>

@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 export const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address."),
+  email: z.string().email("Введите корректный email."),
   password: z
     .string()
-    .min(6, "Password must be at least 6 characters long."),
+    .min(6, "Пароль должен содержать минимум 6 символов."),
 });
 
 export const userFormSchema = z.object({
@@ -12,35 +12,35 @@ export const userFormSchema = z.object({
   status: z.enum(["ACTIVE", "REVIEW", "SUSPENDED"]),
   adminNote: z
     .string()
-    .min(8, "Add a short admin note with at least 8 characters."),
+    .min(8, "Добавь заметку админа минимум из 8 символов."),
 });
 
 export const categoryFormSchema = z.object({
-  name: z.string().min(2, "Category name must be at least 2 characters."),
+  name: z.string().min(2, "Название категории должно быть не короче 2 символов."),
   description: z
     .string()
-    .min(8, "Description must be at least 8 characters long."),
-  color: z.string().min(3, "Color value must be at least 3 characters."),
-  icon: z.string().min(2, "Icon value must be at least 2 characters."),
+    .min(8, "Описание должно содержать минимум 8 символов."),
+  color: z.string().min(3, "Значение цвета должно быть не короче 3 символов."),
+  icon: z.string().min(2, "Название иконки должно быть не короче 2 символов."),
 });
 
 export const habitFormSchema = z.object({
-  title: z.string().min(2, "Habit title must be at least 2 characters."),
-  category: z.string().min(2, "Select a valid category."),
-  points: z.coerce.number().min(0, "Points cannot be negative."),
-  co2Value: z.coerce.number().min(0, "CO2 value cannot be negative."),
-  waterValue: z.coerce.number().min(0, "Water value cannot be negative."),
-  energyValue: z.coerce.number().min(0, "Energy value cannot be negative."),
+  title: z.string().min(2, "Название активности должно быть не короче 2 символов."),
+  category: z.string().min(2, "Выбери корректную категорию."),
+  points: z.coerce.number().min(0, "Баллы не могут быть отрицательными."),
+  co2Value: z.coerce.number().min(0, "Значение CO2 не может быть отрицательным."),
+  waterValue: z.coerce.number().min(0, "Значение воды не может быть отрицательным."),
+  energyValue: z.coerce.number().min(0, "Значение энергии не может быть отрицательным."),
 });
 
 export const achievementFormSchema = z.object({
-  title: z.string().min(2, "Achievement title must be at least 2 characters."),
+  title: z.string().min(2, "Название ачивки должно быть не короче 2 символов."),
   description: z
     .string()
-    .min(8, "Description must be at least 8 characters long."),
-  icon: z.string().min(2, "Icon value must be at least 2 characters."),
-  targetValue: z.coerce.number().min(1, "Target value must be at least 1."),
-  rewardPoints: z.coerce.number().min(0, "Reward points cannot be negative."),
+    .min(8, "Описание должно содержать минимум 8 символов."),
+  icon: z.string().min(2, "Название иконки должно быть не короче 2 символов."),
+  targetValue: z.coerce.number().min(1, "Целевое значение должно быть не меньше 1."),
+  rewardPoints: z.coerce.number().min(0, "Баллы награды не могут быть отрицательными."),
 });
 
 export const postFormSchema = z.object({
@@ -48,7 +48,7 @@ export const postFormSchema = z.object({
   state: z.enum(["Published", "Flagged", "Needs review", "Hidden"]),
   moderatorNote: z
     .string()
-    .min(8, "Moderator note must be at least 8 characters long."),
+    .min(8, "Заметка модератора должна содержать минимум 8 символов."),
 });
 
 export type LoginFormValues = z.infer<typeof loginSchema>;

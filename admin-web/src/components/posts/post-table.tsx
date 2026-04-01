@@ -33,9 +33,9 @@ const stateLabels: Record<CommunityPost["state"] | "ALL", string> = {
 
 const visibilityLabels: Record<CommunityPost["visibility"] | "ALL", string> = {
   ALL: "Вся видимость",
-  PUBLIC: "PUBLIC",
-  FOLLOWERS: "FOLLOWERS",
-  PRIVATE: "PRIVATE",
+  PUBLIC: "Публичный",
+  FOLLOWERS: "Подписчики",
+  PRIVATE: "Приватный",
 };
 
 export function PostTable({
@@ -54,12 +54,12 @@ export function PostTable({
 
   return (
     <article className="card">
-      <div className="section-head">
+      <div className="section-head section-head-stack">
         <div>
           <h2 className="section-title">Очередь модерации</h2>
         </div>
-        <div className="toolbar">
-          <label className="inline-field inline-field-wide">
+        <div className="filter-stack">
+          <label className="inline-field inline-field-search">
             <span className="sr-only">Поиск постов</span>
             <input
               value={filters.search ?? ""}
@@ -69,44 +69,46 @@ export function PostTable({
               placeholder="Поиск по автору или содержимому"
             />
           </label>
-          <label className="inline-field">
-            <span className="sr-only">Фильтр по статусу</span>
-            <select
-              value={filters.state ?? "ALL"}
-              onChange={(event) =>
-                onFilterChange({
-                  ...filters,
-                  state: event.target.value as CommunityPost["state"] | "ALL",
-                })
-              }
-            >
-              {stateOptions.map((option) => (
-                <option key={option} value={option}>
-                  {stateLabels[option]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="inline-field">
-            <span className="sr-only">Фильтр по видимости</span>
-            <select
-              value={filters.visibility ?? "ALL"}
-              onChange={(event) =>
-                onFilterChange({
-                  ...filters,
-                  visibility: event.target.value as
-                    | CommunityPost["visibility"]
-                    | "ALL",
-                })
-              }
-            >
-              {visibilityOptions.map((option) => (
-                <option key={option} value={option}>
-                  {visibilityLabels[option]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="filters-row">
+            <label className="inline-field">
+              <span className="sr-only">Фильтр по статусу</span>
+              <select
+                value={filters.state ?? "ALL"}
+                onChange={(event) =>
+                  onFilterChange({
+                    ...filters,
+                    state: event.target.value as CommunityPost["state"] | "ALL",
+                  })
+                }
+              >
+                {stateOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {stateLabels[option]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="inline-field">
+              <span className="sr-only">Фильтр по видимости</span>
+              <select
+                value={filters.visibility ?? "ALL"}
+                onChange={(event) =>
+                  onFilterChange({
+                    ...filters,
+                    visibility: event.target.value as
+                      | CommunityPost["visibility"]
+                      | "ALL",
+                  })
+                }
+              >
+                {visibilityOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {visibilityLabels[option]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -129,7 +131,7 @@ export function PostTable({
                 onClick={() => onSelect(post.id)}
               >
                 <td>{post.author}</td>
-                <td>{post.visibility}</td>
+                <td>{visibilityLabels[post.visibility]}</td>
                 <td>
                   <span className="pill">{stateLabels[post.state]}</span>
                 </td>

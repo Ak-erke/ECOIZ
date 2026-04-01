@@ -16,6 +16,12 @@ type PostDetailPanelProps = {
 };
 
 export function PostDetailPanel({ post }: PostDetailPanelProps) {
+  const visibilityLabels: Record<CommunityPost["visibility"], string> = {
+    PUBLIC: "Публичный",
+    FOLLOWERS: "Подписчики",
+    PRIVATE: "Приватный",
+  };
+
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const {
@@ -41,6 +47,7 @@ export function PostDetailPanel({ post }: PostDetailPanelProps) {
         description: `Изменения для поста ${updated.author} сохранены.`,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.posts.metrics });
     },
     onError: () => {
       showToast({
@@ -59,6 +66,7 @@ export function PostDetailPanel({ post }: PostDetailPanelProps) {
         description: `Пост от ${post.author} был удален.`,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.posts.metrics });
     },
     onError: () => {
       showToast({
@@ -124,9 +132,9 @@ export function PostDetailPanel({ post }: PostDetailPanelProps) {
         <label className="field">
           <span>Видимость</span>
           <select {...register("visibility")}>
-            <option value="PUBLIC">PUBLIC</option>
-            <option value="FOLLOWERS">FOLLOWERS</option>
-            <option value="PRIVATE">PRIVATE</option>
+            <option value="PUBLIC">{visibilityLabels.PUBLIC}</option>
+            <option value="FOLLOWERS">{visibilityLabels.FOLLOWERS}</option>
+            <option value="PRIVATE">{visibilityLabels.PRIVATE}</option>
           </select>
           {errors.visibility ? (
             <p className="field-error">{errors.visibility.message}</p>

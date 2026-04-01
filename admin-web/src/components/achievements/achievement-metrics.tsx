@@ -10,19 +10,19 @@ export function AchievementMetricsCards({
 }: AchievementMetricsProps) {
   const cards = [
     {
-      label: "Total achievements",
+      label: "Всего ачивок",
       value: metrics.totalAchievements,
-      note: "Current milestone catalog",
+      note: "Текущий каталог ачивок",
     },
     {
-      label: "Reward points",
+      label: "Баллы наград",
       value: metrics.totalRewardPoints,
-      note: "Combined reward budget in mock data",
+      note: "Суммарные награды по всем ачивкам",
     },
     {
-      label: "Max target",
+      label: "Максимальная цель",
       value: metrics.maxTargetValue,
-      note: "Highest completion threshold",
+      note: "Наибольшее пороговое значение",
     },
   ];
 

@@ -51,6 +51,9 @@ export function AchievementDetailPanel({
       await queryClient.invalidateQueries({
         queryKey: queryKeys.achievements.all,
       });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.achievements.metrics,
+      });
     },
     onError: () => {
       showToast({

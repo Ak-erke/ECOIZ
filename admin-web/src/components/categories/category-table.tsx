@@ -17,20 +17,22 @@ export function CategoryTable({
 }: CategoryTableProps) {
   return (
     <article className="card">
-      <div className="section-head">
+      <div className="section-head section-head-stack">
         <div>
           <h2 className="section-title">Список категорий</h2>
         </div>
-        <label className="inline-field inline-field-wide">
-          <span className="sr-only">Поиск категорий</span>
-          <input
-            value={filters.search ?? ""}
-            onChange={(event) =>
-              onFilterChange({ ...filters, search: event.target.value })
-            }
-            placeholder="Поиск по названию, описанию или иконке"
-          />
-        </label>
+        <div className="filter-stack">
+          <label className="inline-field inline-field-search">
+            <span className="sr-only">Поиск категорий</span>
+            <input
+              value={filters.search ?? ""}
+              onChange={(event) =>
+                onFilterChange({ ...filters, search: event.target.value })
+              }
+              placeholder="Поиск по названию, описанию или иконке"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="table-wrap">

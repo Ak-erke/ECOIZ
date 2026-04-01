@@ -1,6 +1,6 @@
 import base64
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -65,6 +65,7 @@ from app.services.bootstrap import (
     serialize_user_challenge,
 )
 from app.services.seed import assign_challenges_for_user
+from app.services.user_progress import recalculate_user_progress
 
 router = APIRouter()
 
@@ -343,17 +344,17 @@ def add_activity(
     db: Session = Depends(get_db),
 ) -> ActivityMutationResponse:
     now = datetime.now(timezone.utc)
-    today = now.date()
     title = payload.title.strip()
     note = payload.note.strip()
     if not title:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Activity title is required.")
 
     user = fetch_user_with_relations(db, current_user.id)
-    todays_activities = [item for item in user.activities if item.created_at.date() == today]
     duplicate_today = any(
-        item.category == payload.category and item.title.casefold() == title.casefold()
-        for item in todays_activities
+        item.category == payload.category
+        and item.title.casefold() == title.casefold()
+        and item.created_at.date() == now.date()
+        for item in user.activities
     )
     if duplicate_today:
         raise HTTPException(
@@ -377,41 +378,15 @@ def add_activity(
         created_at=now,
     )
     db.add(activity)
-    user.points += computed_points
-    user.co2_saved_total += computed_co2_saved
-    if user.last_activity_on == today:
-        next_streak = user.streak_days
-    elif user.last_activity_on == today - timedelta(days=1):
-        next_streak = max(1, user.streak_days + 1)
-    else:
-        next_streak = 1
-    user.streak_days = next_streak
-    user.last_activity_on = today
-
-    total_activity_progress_left_today = max(0, 6 - len(todays_activities))
-    already_counted_category_today = {
-        item.category
-        for item in todays_activities
-    }
-
-    for item in user.user_challenges:
-        before = item.is_completed
-        if item.is_completed:
-            continue
-        challenge_title = item.challenge.title
-        if challenge_title == "7 эко-действий за неделю" and total_activity_progress_left_today > 0:
-            item.current_count += 1
-            total_activity_progress_left_today -= 1
-        elif challenge_title == "3 дня без пластика" and payload.category == "Пластик" and payload.category not in already_counted_category_today:
-            item.current_count += 1
-        elif challenge_title == "Эко-транспорт" and payload.category == "Транспорт" and payload.category not in already_counted_category_today:
-            item.current_count += 1
-        if not before and item.current_count >= item.challenge.target_count:
-            item.is_completed = True
-            item.completed_at = now
-            user.points += item.challenge.reward_points
-
+    db.flush()
+    db.refresh(user)
+    user = fetch_user_with_relations(db, user.id)
+    recalculate_user_progress(user)
     assign_challenges_for_user(db, user, db.scalars(select(Challenge)).all())
+    db.flush()
+    db.refresh(user)
+    user = fetch_user_with_relations(db, user.id)
+    recalculate_user_progress(user)
 
     if payload.shareToNews:
         post = Post(
@@ -449,6 +424,13 @@ def add_post(
     db.flush()
     for media in payload.media:
         db.add(PostMedia(post_id=post.id, kind=media.kind, data=base64.b64decode(media.base64Data.encode("utf-8"))))
+    db.flush()
+    user = fetch_user_with_relations(db, current_user.id)
+    recalculate_user_progress(user)
+    assign_challenges_for_user(db, user, db.scalars(select(Challenge)).all())
+    db.flush()
+    user = fetch_user_with_relations(db, current_user.id)
+    recalculate_user_progress(user)
     db.commit()
     db.refresh(post)
     return PostEnvelope(post=serialize_post(post))
@@ -528,7 +510,7 @@ def admin_user_metrics(_: User = Depends(get_current_admin), db: Session = Depen
     users = db.scalars(select(User)).all()
     return AdminUserMetrics(
         totalUsers=len(users),
-        adminCount=sum(1 for user in users if user.role == "ADMIN"),
+        adminCount=sum(1 for user in users if user.role in {"ADMIN", "MODERATOR"}),
         needsReview=sum(1 for user in users if user.status == "REVIEW"),
         verifiedCount=sum(1 for user in users if user.is_email_verified),
     )
@@ -558,15 +540,41 @@ def admin_user_detail(
 def update_admin_user(
     user_id: str,
     payload: UpdateAdminUserRequest,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    user = db.scalar(select(User).options(selectinload(User.posts)).where(User.id == parse_uuid(user_id)))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if current_admin.role == "MODERATOR":
+        if user.role != "USER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Moderators can only manage regular users.",
+            )
+        if payload.role != user.role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Moderators cannot change user roles.",
+            )
+    user.role = payload.role
+    user.status = payload.status
+    user.admin_note = payload.adminNote.strip() or None
+    db.commit()
+    db.refresh(user)
+    return serialize_admin_user(user)
+
+
+@router.post("/admin/users/{user_id}/verify-email", response_model=AdminUserResponse)
+def verify_admin_user_email(
+    user_id: str,
     _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserResponse:
     user = db.scalar(select(User).options(selectinload(User.posts)).where(User.id == parse_uuid(user_id)))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    user.role = payload.role
-    user.status = payload.status
-    user.admin_note = payload.adminNote.strip() or None
+    user.is_email_verified = True
     db.commit()
     db.refresh(user)
     return serialize_admin_user(user)
@@ -633,10 +641,30 @@ def delete_admin_activity(
     _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    activity = db.scalar(select(Activity).where(Activity.id == parse_uuid(activity_id)))
+    activity = db.scalar(
+        select(Activity)
+        .options(
+            selectinload(Activity.user).selectinload(User.activities),
+            selectinload(Activity.user).selectinload(User.posts),
+            selectinload(Activity.user)
+            .selectinload(User.user_challenges)
+            .selectinload(UserChallenge.challenge),
+        )
+        .where(Activity.id == parse_uuid(activity_id))
+    )
     if not activity:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found.")
+    user_id = activity.user.id
     db.delete(activity)
+    db.flush()
+    db.expire_all()
+    user = fetch_user_with_relations(db, user_id)
+    recalculate_user_progress(user)
+    assign_challenges_for_user(db, user, db.scalars(select(Challenge)).all())
+    db.flush()
+    db.expire_all()
+    user = fetch_user_with_relations(db, user_id)
+    recalculate_user_progress(user)
     db.commit()
 
 
@@ -671,7 +699,7 @@ def admin_category_metrics(_: User = Depends(get_current_admin), db: Session = D
 def update_category(
     category_id: str,
     payload: UpdateCategoryRequest,
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> EcoCategoryResponse:
     category = db.scalar(select(EcoCategory).where(EcoCategory.id == parse_uuid(category_id)))
@@ -704,11 +732,10 @@ def delete_category(
     _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    category = db.scalar(select(EcoCategory).where(EcoCategory.id == parse_uuid(category_id)))
-    if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found.")
-    db.delete(category)
-    db.commit()
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="System categories are fixed and cannot be deleted from admin.",
+    )
 
 
 @router.get("/admin/habits", response_model=list[HabitResponse])
@@ -744,7 +771,7 @@ def admin_habit_metrics(_: User = Depends(get_current_admin), db: Session = Depe
 def update_habit(
     habit_id: str,
     payload: UpdateHabitRequest,
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> HabitResponse:
     habit = db.scalar(select(Habit).options(selectinload(Habit.category)).where(Habit.id == parse_uuid(habit_id)))
@@ -773,26 +800,10 @@ def create_habit(
     _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> HabitResponse:
-    category_name = payload.category.strip()
-    category = db.scalar(select(EcoCategory).where(EcoCategory.name == category_name))
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="System category not found.",
-        )
-    habit = Habit(
-        title=payload.title.strip(),
-        description=payload.description.strip() or None,
-        points=payload.points,
-        co2_value=payload.co2Value,
-        water_value=payload.waterValue,
-        energy_value=payload.energyValue,
-        category_id=category.id,
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="System activities are fixed and cannot be added from admin.",
     )
-    db.add(habit)
-    db.commit()
-    db.refresh(habit)
-    return serialize_habit(db.scalar(select(Habit).options(selectinload(Habit.category)).where(Habit.id == habit.id)))
 
 
 @router.delete("/admin/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -801,11 +812,10 @@ def delete_habit(
     _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    habit = db.scalar(select(Habit).where(Habit.id == parse_uuid(habit_id)))
-    if not habit:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found.")
-    db.delete(habit)
-    db.commit()
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="System activities are fixed and cannot be deleted from admin.",
+    )
 
 
 @router.get("/admin/achievements", response_model=list[AchievementResponse])
@@ -835,7 +845,7 @@ def admin_achievement_metrics(_: User = Depends(get_current_admin), db: Session 
 def update_achievement(
     achievement_id: str,
     payload: UpdateAchievementRequest,
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> AchievementResponse:
     challenge = db.scalar(select(Challenge).where(Challenge.id == parse_uuid(achievement_id)))
@@ -854,7 +864,7 @@ def update_achievement(
 @router.post("/admin/achievements", response_model=AchievementResponse, status_code=status.HTTP_201_CREATED)
 def create_achievement(
     payload: CreateAchievementRequest,
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> AchievementResponse:
     if db.scalar(select(Challenge).where(Challenge.title == payload.title.strip())):
@@ -877,7 +887,7 @@ def create_achievement(
 @router.delete("/admin/achievements/{achievement_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_achievement(
     achievement_id: str,
-    _: User = Depends(get_current_admin),
+    _: User = Depends(get_current_root_admin),
     db: Session = Depends(get_db),
 ) -> None:
     challenge = db.scalar(select(Challenge).where(Challenge.id == parse_uuid(achievement_id)))
@@ -966,8 +976,28 @@ def delete_post(
     _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    post = db.scalar(select(Post).where(Post.id == parse_uuid(post_id)))
+    post = db.scalar(
+        select(Post)
+        .options(
+            selectinload(Post.user).selectinload(User.activities),
+            selectinload(Post.user).selectinload(User.posts),
+            selectinload(Post.user)
+            .selectinload(User.user_challenges)
+            .selectinload(UserChallenge.challenge),
+        )
+        .where(Post.id == parse_uuid(post_id))
+    )
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+    user_id = post.user.id
     db.delete(post)
+    db.flush()
+    db.expire_all()
+    user = fetch_user_with_relations(db, user_id)
+    recalculate_user_progress(user)
+    assign_challenges_for_user(db, user, db.scalars(select(Challenge)).all())
+    db.flush()
+    db.expire_all()
+    user = fetch_user_with_relations(db, user_id)
+    recalculate_user_progress(user)
     db.commit()

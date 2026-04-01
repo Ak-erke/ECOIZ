@@ -22,7 +22,7 @@ export default async function AchievementsPage() {
     <>
       <PageHeader
         title="Ачивки"
-        description="Просмотр milestone-каталога, target value и reward points."
+        description="Просмотр каталога ачивок, целевых значений и наградных баллов."
       />
       <AchievementsWorkspace
         initialAchievements={achievements}

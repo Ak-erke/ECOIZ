@@ -66,19 +66,19 @@ export function CategoriesWorkspace({
           <CategoryDetailPanel category={selectedCategory} />
         ) : categoriesQuery.isLoading || categoriesQuery.isFetching ? (
           <StatePanel
-            title="Loading categories"
-            description="Refreshing the current eco category catalog and applying your search."
+            title="Загружаем категории"
+            description="Обновляем каталог категорий и применяем поиск."
           />
         ) : categoriesQuery.isError ? (
           <StatePanel
-            title="Failed to load categories"
-            description="The category directory could not be loaded. Try refreshing the page."
+            title="Не удалось загрузить категории"
+            description="Каталог категорий не загрузился. Попробуй обновить страницу."
             tone="error"
           />
         ) : (
           <StatePanel
-            title="No categories found"
-            description="Clear the search term to return to the full category catalog."
+            title="Категории не найдены"
+            description="Очисти поиск, чтобы снова увидеть весь каталог категорий."
             tone="warning"
           />
         )}

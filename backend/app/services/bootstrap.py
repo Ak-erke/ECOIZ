@@ -82,12 +82,13 @@ def serialize_activity(activity: Activity) -> ActivityResponse:
 
 def serialize_user_challenge(item: UserChallenge) -> ChallengeResponse:
     challenge = item.challenge
+    display_count = min(item.current_count, challenge.target_count)
     return ChallengeResponse(
         id=str(challenge.id),
         title=challenge.title,
         description=challenge.description,
         targetCount=challenge.target_count,
-        currentCount=item.current_count,
+        currentCount=display_count,
         rewardPoints=challenge.reward_points,
         badgeSymbol=challenge.badge_symbol,
         badgeTintHex=challenge.badge_tint_hex,

@@ -54,7 +54,9 @@ export async function getAdminUserMetrics(): Promise<UserMetrics> {
 
   return {
     totalUsers: mockUsers.length,
-    adminCount: mockUsers.filter((user) => user.role === "ADMIN").length,
+    adminCount: mockUsers.filter((user) =>
+      user.role === "ADMIN" || user.role === "MODERATOR",
+    ).length,
     needsReview: mockUsers.filter((user) => user.status === "REVIEW").length,
     verifiedCount: mockUsers.filter((user) => user.isEmailVerified).length,
   };
@@ -163,6 +165,24 @@ export async function updateAdminUser(
     role: payload.role,
     status: payload.status,
   };
+}
+
+export async function verifyAdminUserEmail(userId: string): Promise<AdminUser> {
+  if (!isMockMode()) {
+    return apiRequest<AdminUser>(`/admin/users/${userId}/verify-email`, {
+      method: "POST",
+    });
+  }
+
+  await wait(120);
+
+  const user = mockUsers.find((item) => item.id === userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  user.isEmailVerified = true;
+  return { ...user };
 }
 
 export async function deleteAdminUser(userId: string): Promise<void> {

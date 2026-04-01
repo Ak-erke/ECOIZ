@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
-import { navigation } from "@/lib/navigation";
+import { getNavigation } from "@/lib/navigation";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -15,6 +15,13 @@ export function Sidebar() {
     logout();
     router.replace("/login");
   }
+
+  const roleLabels = {
+    ADMIN: "Админ",
+    MODERATOR: "Модератор",
+    USER: "Пользователь",
+  } as const;
+  const navigation = getNavigation(user?.role ?? null);
 
   return (
     <aside className="sidebar">
@@ -46,7 +53,7 @@ export function Sidebar() {
         <div className="sidebar-user">
           <strong>{user?.username}</strong>
           <span className="muted">
-            {user?.role} · {user?.email}
+            {user?.role ? roleLabels[user.role] : ""} · {user?.email}
           </span>
         </div>
         <button type="button" className="ghost-button sidebar-button" onClick={handleLogout}>

@@ -75,19 +75,19 @@ export function AchievementsWorkspace({
           <AchievementDetailPanel achievement={selectedAchievement} />
         ) : achievementsQuery.isLoading || achievementsQuery.isFetching ? (
           <StatePanel
-            title="Loading achievements"
-            description="Refreshing milestone configuration and applying your search."
+            title="Загружаем ачивки"
+            description="Обновляем каталог ачивок и применяем поиск."
           />
         ) : achievementsQuery.isError ? (
           <StatePanel
-            title="Failed to load achievements"
-            description="The achievement directory could not be loaded. Try refreshing the page."
+            title="Не удалось загрузить ачивки"
+            description="Каталог ачивок не загрузился. Попробуй обновить страницу."
             tone="error"
           />
         ) : (
           <StatePanel
-            title="No achievements found"
-            description="Clear the search term to return to the configured achievement catalog."
+            title="Ачивки не найдены"
+            description="Очисти поиск, чтобы снова увидеть весь каталог ачивок."
             tone="warning"
           />
         )}

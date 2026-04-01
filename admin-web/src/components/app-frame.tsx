@@ -14,7 +14,7 @@ type AppFrameProps = {
 export function AppFrame({ children }: AppFrameProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   const isLoginPage = pathname === "/login";
 
@@ -30,21 +30,40 @@ export function AppFrame({ children }: AppFrameProps) {
 
     if (isAuthenticated && isLoginPage) {
       router.replace("/");
+      return;
     }
-  }, [isAuthenticated, isLoading, isLoginPage, router]);
+
+    if (
+      user?.role === "MODERATOR" &&
+      ["/categories", "/habits", "/achievements"].some((route) =>
+        pathname.startsWith(route),
+      )
+    ) {
+      router.replace("/");
+    }
+  }, [isAuthenticated, isLoading, isLoginPage, pathname, router, user?.role]);
 
   if (isLoading) {
     return (
       <div className="auth-shell">
         <StatePanel
-          title="Loading admin session"
-          description="Checking saved login and access level."
+          title="Загружаем сессию админа"
+          description="Проверяем сохраненный вход и уровень доступа."
         />
       </div>
     );
   }
 
   if (!isAuthenticated && !isLoginPage) {
+    return null;
+  }
+
+  if (
+    user?.role === "MODERATOR" &&
+    ["/categories", "/habits", "/achievements"].some((route) =>
+      pathname.startsWith(route),
+    )
+  ) {
     return null;
   }
 

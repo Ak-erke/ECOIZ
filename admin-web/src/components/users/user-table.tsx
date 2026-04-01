@@ -46,12 +46,12 @@ export function UserTable({
 
   return (
     <article className="card">
-      <div className="section-head">
+      <div className="section-head section-head-stack">
         <div>
           <h2 className="section-title">Список пользователей</h2>
         </div>
-        <div className="toolbar">
-          <label className="inline-field">
+        <div className="filter-stack">
+          <label className="inline-field inline-field-search">
             <span className="sr-only">Поиск пользователей</span>
             <input
               value={filters.search ?? ""}
@@ -61,42 +61,44 @@ export function UserTable({
               placeholder="Поиск по username или email"
             />
           </label>
-          <label className="inline-field">
-            <span className="sr-only">Фильтр по роли</span>
-            <select
-              value={filters.role ?? "ALL"}
-              onChange={(event) =>
-                onFilterChange({
-                  ...filters,
-                  role: event.target.value as UserRole | "ALL",
-                })
-              }
-            >
-              {roleOptions.map((option) => (
-                <option key={option} value={option}>
-                  {roleLabels[option]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="inline-field">
-            <span className="sr-only">Фильтр по статусу</span>
-            <select
-              value={filters.status ?? "ALL"}
-              onChange={(event) =>
-                onFilterChange({
-                  ...filters,
-                  status: event.target.value as UserStatus | "ALL",
-                })
-              }
-            >
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {statusLabels[option]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="filters-row">
+            <label className="inline-field">
+              <span className="sr-only">Фильтр по роли</span>
+              <select
+                value={filters.role ?? "ALL"}
+                onChange={(event) =>
+                  onFilterChange({
+                    ...filters,
+                    role: event.target.value as UserRole | "ALL",
+                  })
+                }
+              >
+                {roleOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {roleLabels[option]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="inline-field">
+              <span className="sr-only">Фильтр по статусу</span>
+              <select
+                value={filters.status ?? "ALL"}
+                onChange={(event) =>
+                  onFilterChange({
+                    ...filters,
+                    status: event.target.value as UserStatus | "ALL",
+                  })
+                }
+              >
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {statusLabels[option]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 

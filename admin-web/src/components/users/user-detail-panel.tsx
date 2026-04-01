@@ -7,7 +7,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 
 import { useToast } from "@/components/toast-provider";
-import { deleteAdminUser, getAdminUserDetail, updateAdminUser } from "@/lib/api/users";
+import { useAuth } from "@/components/auth-provider";
+import {
+  deleteAdminUser,
+  getAdminUserDetail,
+  updateAdminUser,
+  verifyAdminUserEmail,
+} from "@/lib/api/users";
 import { queryKeys } from "@/lib/query-keys";
 import type { AdminUser, AdminUserDetail, UpdateAdminUserPayload } from "@/lib/types";
 import { userFormSchema, type UserFormValues } from "@/lib/validation";
@@ -29,8 +35,8 @@ const statusLabels = {
 } as const;
 
 export function UserDetailPanel({ user }: UserDetailPanelProps) {
-  const [activitiesExpanded, setActivitiesExpanded] = useState(false);
   const [challengesExpanded, setChallengesExpanded] = useState(false);
+  const { user: currentStaff } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const detailQuery = useQuery({
@@ -66,6 +72,7 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
       await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(user.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.metrics });
     },
     onError: () => {
       showToast({
@@ -84,12 +91,37 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
         description: `Аккаунт ${user.username} был удален.`,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.metrics });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.activities.metrics });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.posts.metrics });
     },
     onError: () => {
       showToast({
         tone: "error",
         title: "Удаление не удалось",
         description: "Не получилось удалить пользователя.",
+      });
+    },
+  });
+  const verifyEmailMutation = useMutation({
+    mutationFn: () => verifyAdminUserEmail(user.id),
+    onSuccess: async () => {
+      showToast({
+        tone: "success",
+        title: "Email подтвержден",
+        description: `Email пользователя ${user.username} отмечен как подтвержденный.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(user.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.metrics });
+    },
+    onError: () => {
+      showToast({
+        tone: "error",
+        title: "Не удалось подтвердить email",
+        description: "Попробуй выполнить действие еще раз.",
       });
     },
   });
@@ -154,6 +186,8 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
   }
 
   const displayUser: AdminUser | AdminUserDetail = detail ?? user;
+  const isModerator = currentStaff?.role === "MODERATOR";
+  const canModerateSelectedUser = !isModerator || displayUser.role === "USER";
   const sortedChallenges =
     "challenges" in displayUser
       ? [...displayUser.challenges].sort((left, right) => {
@@ -166,6 +200,11 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
           return right.currentCount - left.currentCount;
         })
       : [];
+
+  const completedChallenges =
+    "challenges" in displayUser
+      ? displayUser.challenges.filter((item) => item.isCompleted).length
+      : 0;
 
   return (
     <article className="card">
@@ -209,7 +248,7 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
             </div>
             <div className="detail-row">
               <span className="muted">Суммарно CO2</span>
-              <strong>{displayUser.co2SavedTotal.toFixed(1)} kg</strong>
+              <strong>{displayUser.co2SavedTotal.toFixed(1)} кг</strong>
             </div>
             <div className="detail-row">
               <span className="muted">Создано постов</span>
@@ -230,68 +269,50 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
         {detailQuery.isLoading ? (
           <p className="muted">Загружаем сводку по пользователю...</p>
         ) : (
-          <div className="detail-stack">
-            <div className="detail-row">
+          <div className="stats-grid">
+            <div className="stat-chip">
               <span className="muted">Подтверждение</span>
               <strong>{displayUser.isEmailVerified ? "Подтвержден" : "Ожидает"}</strong>
             </div>
-            <div className="detail-row">
+            <div className="stat-chip">
               <span className="muted">Прогресс ачивок</span>
               <strong>
                 {"challenges" in displayUser
-                  ? `${displayUser.challenges.filter((item) => item.isCompleted).length}/${displayUser.challenges.length} завершено`
+                  ? `${completedChallenges}/${displayUser.challenges.length} завершено`
                   : "Загрузка..."}
               </strong>
             </div>
           </div>
         )}
-        <div className="button-row">
-          <Link
-            className="ghost-button"
-            href={`/activities?search=${encodeURIComponent(displayUser.email)}`}
-          >
-            Активности пользователя
-          </Link>
-          <Link
-            className="ghost-button"
-            href={`/posts?search=${encodeURIComponent(
-              "fullName" in displayUser ? displayUser.fullName : displayUser.username,
-            )}`}
-          >
-            Посты пользователя
-          </Link>
-        </div>
-      </div>
-
-      <div className="form-shell">
-        {renderSectionHeader("Последние активности", activitiesExpanded, () =>
-          setActivitiesExpanded((current) => !current),
-        )}
-        {detailQuery.isLoading ? (
-          <p className="muted">Загружаем последние активности...</p>
-        ) : !activitiesExpanded ? (
-          <p className="muted">
-            {"recentActivities" in displayUser
-              ? `${displayUser.recentActivities.length} скрыто`
-              : "Разверни блок, чтобы увидеть активности."}
-          </p>
-        ) : "recentActivities" in displayUser && displayUser.recentActivities.length > 0 ? (
-          <div className="detail-stack">
-            {displayUser.recentActivities.map((activity) => (
-              <div key={activity.id} className="detail-row" style={{ alignItems: "flex-start" }}>
-                <div>
-                  <strong>{activity.title}</strong>
-                  <p className="muted">
-                    {activity.category} · {activity.points} баллов · {activity.co2Saved.toFixed(1)} кг CO2
-                  </p>
-                </div>
-                <span className="muted">{formatDate(activity.createdAt)}</span>
-              </div>
-            ))}
+        <div className="action-group">
+          <p className="muted action-group-title">Быстрые действия</p>
+          <div className="action-grid">
+            <Link
+              className="ghost-button"
+              href={`/activities?search=${encodeURIComponent(displayUser.email)}`}
+            >
+              Активности пользователя
+            </Link>
+            <Link
+              className="ghost-button"
+              href={`/posts?search=${encodeURIComponent(
+                "fullName" in displayUser ? displayUser.fullName : displayUser.username,
+              )}`}
+            >
+              Посты пользователя
+            </Link>
+            {!displayUser.isEmailVerified && !isModerator ? (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => verifyEmailMutation.mutate()}
+                disabled={verifyEmailMutation.isPending}
+              >
+                {verifyEmailMutation.isPending ? "Подтверждаем..." : "Подтвердить email"}
+              </button>
+            ) : null}
           </div>
-        ) : (
-          renderEmpty("У этого пользователя пока нет недавних активностей.")
-        )}
+        </div>
       </div>
 
       <div className="form-shell">
@@ -307,17 +328,20 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
               : "Разверни блок, чтобы увидеть прогресс."}
           </p>
         ) : "challenges" in displayUser && sortedChallenges.length > 0 ? (
-          <div className="detail-stack">
+          <div className="challenge-list">
             {sortedChallenges.map((challenge) => (
-              <div key={challenge.id} className="detail-row" style={{ alignItems: "flex-start" }}>
+              <div
+                key={challenge.id}
+                className={`challenge-card${challenge.isCompleted ? " challenge-card-complete" : ""}`}
+              >
                 <div>
                   <strong>{challenge.title}</strong>
                   <p className="muted">
                     {challenge.currentCount}/{challenge.targetCount} · {challenge.rewardPoints} баллов
                   </p>
                 </div>
-                <strong>
-                  {challenge.isClaimed ? "Получено" : challenge.isCompleted ? "Завершено" : "В процессе"}
+                <strong className={challenge.isCompleted ? "challenge-status-complete" : ""}>
+                  {challenge.isCompleted ? "Получено" : "В процессе"}
                 </strong>
               </div>
             ))}
@@ -328,45 +352,26 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
       </div>
 
       <div className="form-shell">
-        <h3 className="section-title" style={{ marginBottom: 12 }}>
-          Последние посты
-        </h3>
-        {detailQuery.isLoading ? (
-          <p className="muted">Загружаем посты пользователя...</p>
-        ) : "recentPosts" in displayUser && displayUser.recentPosts.length > 0 ? (
-          <div className="detail-stack">
-            {displayUser.recentPosts.map((post) => (
-              <div key={post.id} className="detail-row" style={{ alignItems: "flex-start" }}>
-                <div>
-                  <strong>{post.content || "Пост только с медиа"}</strong>
-                  <p className="muted">
-                    {post.state} · {post.visibility} · {post.reportsCount} жалоб
-                    {post.mediaCount > 0 ? ` · ${post.mediaCount} медиа` : ""}
-                  </p>
-                </div>
-                <span className="muted">{formatDate(post.createdAt)}</span>
-              </div>
-            ))}
-          </div>
+        {!isModerator ? (
+          <label className="field">
+            <span>Роль</span>
+            <select {...register("role")}>
+              <option value="USER">Пользователь</option>
+              <option value="MODERATOR">Модератор</option>
+              <option value="ADMIN">Админ</option>
+            </select>
+            {errors.role ? <p className="field-error">{errors.role.message}</p> : null}
+          </label>
         ) : (
-          renderEmpty("У пользователя пока нет постов.")
+          <div className="detail-row">
+            <span className="muted">Роль</span>
+            <strong>{roleLabels[displayUser.role]}</strong>
+          </div>
         )}
-      </div>
-
-      <div className="form-shell">
-        <label className="field">
-          <span>Роль</span>
-          <select {...register("role")}>
-            <option value="USER">Пользователь</option>
-            <option value="MODERATOR">Модератор</option>
-            <option value="ADMIN">Админ</option>
-          </select>
-          {errors.role ? <p className="field-error">{errors.role.message}</p> : null}
-        </label>
 
         <label className="field">
           <span>Статус</span>
-          <select {...register("status")}>
+          <select {...register("status")} disabled={!canModerateSelectedUser}>
             <option value="ACTIVE">Активный</option>
             <option value="REVIEW">На проверке</option>
             <option value="SUSPENDED">Приостановлен</option>
@@ -378,11 +383,17 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
 
         <label className="field">
           <span>Заметка админа</span>
-          <textarea rows={4} {...register("adminNote")} />
+          <textarea rows={4} {...register("adminNote")} disabled={!canModerateSelectedUser} />
           {errors.adminNote ? (
             <p className="field-error">{errors.adminNote.message}</p>
           ) : null}
         </label>
+
+        {isModerator && !canModerateSelectedUser ? (
+          <p className="form-status muted">
+            Модератор может менять статус и заметку только у обычных пользователей.
+          </p>
+        ) : null}
 
         <p className="form-status muted">
           {isDirty ? "Есть несохраненные изменения." : "Изменений нет."}
@@ -393,7 +404,7 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
             type="button"
             className="primary-button"
             onClick={handleSubmit(onSubmit)}
-            disabled={mutation.isPending || !isDirty}
+            disabled={mutation.isPending || !isDirty || !canModerateSelectedUser}
           >
             {mutation.isPending ? "Сохраняем..." : "Сохранить"}
           </button>
@@ -406,17 +417,20 @@ export function UserDetailPanel({ user }: UserDetailPanelProps) {
                 shouldDirty: true,
               })
             }
+            disabled={!canModerateSelectedUser}
           >
             Приостановить
           </button>
-          <button
-            type="button"
-            className="ghost-button danger-button"
-            onClick={onDelete}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? "Удаляем..." : "Удалить пользователя"}
-          </button>
+          {!isModerator ? (
+            <button
+              type="button"
+              className="ghost-button danger-button"
+              onClick={onDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Удаляем..." : "Удалить пользователя"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="ghost-button"

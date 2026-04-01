@@ -21,7 +21,7 @@ export function ActivityMetricsCards({
     },
     {
       label: "Сэкономлено CO2",
-      value: `${metrics.totalCo2Saved.toFixed(1)} kg`,
+      value: `${metrics.totalCo2Saved.toFixed(1)} кг`,
       note: "Суммарный эко-эффект по зафиксированным действиям",
     },
     {

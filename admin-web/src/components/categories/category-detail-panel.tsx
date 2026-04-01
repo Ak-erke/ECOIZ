@@ -40,6 +40,7 @@ export function CategoryDetailPanel({ category }: CategoryDetailPanelProps) {
         description: `Изменения для "${updated.name}" сохранены.`,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.categories.metrics });
     },
     onError: () => {
       showToast({

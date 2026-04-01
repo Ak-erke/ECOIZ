@@ -36,12 +36,12 @@ export function HabitTable({
 }: HabitTableProps) {
   return (
     <article className="card">
-      <div className="section-head">
+      <div className="section-head section-head-stack">
         <div>
           <h2 className="section-title">Каталог активностей</h2>
         </div>
-        <div className="toolbar">
-          <label className="inline-field inline-field-wide">
+        <div className="filter-stack">
+          <label className="inline-field inline-field-search">
             <span className="sr-only">Поиск активностей</span>
             <input
               value={filters.search ?? ""}
@@ -51,25 +51,27 @@ export function HabitTable({
               placeholder="Поиск по названию или категории"
             />
           </label>
-          <label className="inline-field">
-            <span className="sr-only">Фильтр по категории</span>
-            <select
-              value={filters.category ?? "ALL"}
-              onChange={(event) =>
-                onFilterChange({
-                  ...filters,
-                  category: event.target.value,
-                })
-              }
-            >
-              <option value="ALL">Все</option>
-              {categoryOptions.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="filters-row">
+            <label className="inline-field">
+              <span className="sr-only">Фильтр по категории</span>
+              <select
+                value={filters.category ?? "ALL"}
+                onChange={(event) =>
+                  onFilterChange({
+                    ...filters,
+                    category: event.target.value,
+                  })
+                }
+              >
+                <option value="ALL">Все</option>
+                {categoryOptions.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 

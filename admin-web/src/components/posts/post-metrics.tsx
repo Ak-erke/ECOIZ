@@ -8,24 +8,24 @@ type PostMetricsProps = {
 export function PostMetricsCards({ metrics }: PostMetricsProps) {
   const cards = [
     {
-      label: "Total posts",
+      label: "Всего постов",
       value: metrics.totalPosts,
-      note: "Current moderation scope",
+      note: "Текущий объем модерации",
     },
     {
-      label: "Flagged",
+      label: "Отмеченные",
       value: metrics.flaggedPosts,
-      note: "Need moderator attention first",
+      note: "Требуют внимания в первую очередь",
     },
     {
-      label: "Hidden",
+      label: "Скрытые",
       value: metrics.hiddenPosts,
-      note: "Already restricted from public view",
+      note: "Уже убраны из публичного просмотра",
     },
     {
-      label: "Reports",
+      label: "Жалобы",
       value: metrics.totalReports,
-      note: "Total report count across current posts",
+      note: "Общее количество жалоб по текущим постам",
     },
   ];
 

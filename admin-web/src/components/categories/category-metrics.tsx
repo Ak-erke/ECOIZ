@@ -8,19 +8,19 @@ type CategoryMetricsProps = {
 export function CategoryMetricsCards({ metrics }: CategoryMetricsProps) {
   const cards = [
     {
-      label: "Total categories",
+      label: "Всего категорий",
       value: metrics.totalCategories,
-      note: "Current eco catalog sections",
+      note: "Текущие разделы eco-каталога",
     },
     {
-      label: "Unique colors",
+      label: "Уникальные цвета",
       value: metrics.uniqueColors,
-      note: "Used for visual classification",
+      note: "Используются для визуального различия",
     },
     {
-      label: "Active icons",
+      label: "Иконки",
       value: metrics.iconCount,
-      note: "Icon labels in the current mock set",
+      note: "Количество используемых иконок",
     },
   ];
 

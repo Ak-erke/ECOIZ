@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.admin import EcoCategory, Habit
 from app.models.challenge import Challenge, UserChallenge
@@ -10,6 +10,7 @@ from app.models.post import Post
 from app.models.user import Activity, User
 from app.services.auth import hash_password
 from app.services.bootstrap import unlocked_challenge_count
+from app.services.user_progress import recalculate_user_progress
 
 
 CHALLENGE_UNLOCK_ORDER = [
@@ -67,13 +68,20 @@ FIXED_HABIT_SPECS = [
 
 
 def assign_challenges_for_user(db: Session, user: User, challenges: list[Challenge]) -> None:
+    if user.role != "USER":
+        return
+
     unlocked_count = min(unlocked_challenge_count(user.points), len(challenges))
     order_map = {title: index for index, title in enumerate(CHALLENGE_UNLOCK_ORDER)}
     unlocked_challenges = sorted(challenges, key=lambda item: order_map.get(item.title, len(order_map)))[:unlocked_count]
-    existing_by_challenge_id = {
-        item.challenge_id
-        for item in db.scalars(select(UserChallenge).where(UserChallenge.user_id == user.id)).all()
-    }
+    unlocked_ids = {challenge.id for challenge in unlocked_challenges}
+    existing_items = db.scalars(select(UserChallenge).where(UserChallenge.user_id == user.id)).all()
+    existing_by_challenge_id = {item.challenge_id: item for item in existing_items}
+
+    for stale_item in existing_items:
+        if stale_item.challenge_id not in unlocked_ids:
+            db.delete(stale_item)
+
     for challenge in unlocked_challenges:
         if challenge.id in existing_by_challenge_id:
             continue
@@ -85,6 +93,18 @@ def assign_challenges_for_user(db: Session, user: User, challenges: list[Challen
                 is_completed=False,
             )
         )
+
+
+def _fetch_user_with_relations(db: Session, user_id) -> User | None:
+    return db.scalar(
+        select(User)
+        .options(
+            selectinload(User.activities),
+            selectinload(User.posts),
+            selectinload(User.user_challenges).selectinload(UserChallenge.challenge),
+        )
+        .where(User.id == user_id)
+    )
 
 
 def ensure_seed_data(db: Session) -> None:
@@ -100,10 +120,10 @@ def ensure_seed_data(db: Session) -> None:
             role="USER",
             status="ACTIVE",
             is_email_verified=True,
-            points=90,
-            streak_days=2,
+            points=0,
+            streak_days=0,
             last_activity_on=last_activity_seed_date,
-            co2_saved_total=8.6,
+            co2_saved_total=0,
         )
         db.add(user)
         db.flush()
@@ -128,6 +148,38 @@ def ensure_seed_data(db: Session) -> None:
         )
         db.add(admin)
         db.flush()
+    else:
+        admin.full_name = "Администратор"
+        admin.username = "admin"
+        admin.password_hash = hash_password("admin123")
+        admin.role = "ADMIN"
+        admin.status = "ACTIVE"
+        admin.is_email_verified = True
+
+    moderator = db.scalar(select(User).where(User.email == "moderator@ecoiz.app"))
+    if not moderator:
+        moderator = User(
+            full_name="Модератор",
+            email="moderator@ecoiz.app",
+            username="moderator",
+            password_hash=hash_password("moderator123"),
+            role="MODERATOR",
+            status="ACTIVE",
+            is_email_verified=True,
+            points=0,
+            streak_days=0,
+            last_activity_on=None,
+            co2_saved_total=0,
+        )
+        db.add(moderator)
+        db.flush()
+    else:
+        moderator.full_name = "Модератор"
+        moderator.username = "moderator"
+        moderator.password_hash = hash_password("moderator123")
+        moderator.role = "MODERATOR"
+        moderator.status = "ACTIVE"
+        moderator.is_email_verified = True
 
     challenge_specs = [
         ("7 эко-действий за неделю", "Добавь 7 любых экологичных активностей", 7, 60, "leaf.fill", 0x43B244, 0xEAF8DF),
@@ -213,7 +265,8 @@ def ensure_seed_data(db: Session) -> None:
         habit.energy_value = energy_value
         habit.category_id = category_by_name[category_name].id
 
-    assign_challenges_for_user(db, user, challenges)
+    for challenge_user in db.scalars(select(User).where(User.role == "USER")).all():
+        assign_challenges_for_user(db, challenge_user, challenges)
     db.flush()
 
     user_challenges = db.scalars(select(UserChallenge).where(UserChallenge.user_id == user.id)).all()
@@ -259,4 +312,22 @@ def ensure_seed_data(db: Session) -> None:
         )
     if not db.scalar(select(ChatMessage).where(ChatMessage.user_id == user.id)):
         db.add(ChatMessage(user_id=user.id, role="assistant", text="Привет! Я эко-ИИ. Помогу улучшить твои экопривычки и мотивацию.", created_at=now))
+    db.flush()
+
+    user_ids = [item.id for item in db.scalars(select(User)).all()]
+    for user_id in user_ids:
+        db.expire_all()
+        synced_user = _fetch_user_with_relations(db, user_id)
+        if not synced_user:
+            continue
+        recalculate_user_progress(synced_user)
+        if synced_user.role == "USER":
+            assign_challenges_for_user(db, synced_user, challenges)
+            db.flush()
+            db.expire_all()
+            synced_user = _fetch_user_with_relations(db, user_id)
+            if not synced_user:
+                continue
+            recalculate_user_progress(synced_user)
+
     db.commit()

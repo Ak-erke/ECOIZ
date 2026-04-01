@@ -38,7 +38,7 @@ export default function LoginPage() {
       router.replace("/");
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Login failed. Try again.";
+        err instanceof Error ? err.message : "Не удалось войти. Попробуй еще раз.";
       setError("root", { message });
     }
   }
@@ -46,12 +46,12 @@ export default function LoginPage() {
   return (
     <div className="auth-shell">
       <div className="auth-card">
-        <p className="auth-kicker">ECOIZ admin access</p>
-        <h1 className="auth-title">Sign in to the moderation workspace</h1>
+        <p className="auth-kicker">Доступ в админку ECOIZ</p>
+        <h1 className="auth-title">Вход в пространство модерации</h1>
         <p className="muted">
           {mockMode
-            ? "Mock credentials are prefilled for UI development."
-            : "Live backend mode is enabled. Use the seeded admin account to sign in."}
+            ? "Тестовые данные уже подставлены для проверки интерфейса."
+            : "Включен live-режим backend. Используй seeded admin-аккаунт для входа."}
         </p>
 
         <form className="form-shell" onSubmit={handleSubmit(onSubmit)}>
@@ -64,7 +64,7 @@ export default function LoginPage() {
           </label>
 
           <label className="field">
-            <span>Password</span>
+            <span>Пароль</span>
             <input type="password" {...register("password")} />
             {errors.password ? (
               <p className="field-error">{errors.password.message}</p>
@@ -77,10 +77,10 @@ export default function LoginPage() {
 
           <p className="form-status muted">
             {isDirty
-              ? "You have unsaved login changes."
+              ? "Есть несохраненные изменения в форме входа."
               : mockMode
-                ? "Mock credentials are ready."
-                : "Live admin credentials are ready."}
+                ? "Тестовые данные готовы."
+                : "Данные live-админа готовы."}
           </p>
 
           <div className="button-row">
@@ -89,27 +89,30 @@ export default function LoginPage() {
               className="primary-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? "Входим..." : "Войти"}
             </button>
             <button
               type="button"
               className="ghost-button"
               onClick={() => reset(defaultCredentials)}
             >
-              Reset
+              Сбросить
             </button>
           </div>
         </form>
 
         <div className="auth-hint">
-          <strong>{mockMode ? "Mock accounts" : "Live backend account"}</strong>
+          <strong>{mockMode ? "Тестовые аккаунты" : "Аккаунт live-backend"}</strong>
           {mockMode ? (
             <>
               <p className="muted">`akmaral@ecoiz.app / admin123`</p>
               <p className="muted">`nurdana@ecoiz.app / moderator123`</p>
             </>
           ) : (
-            <p className="muted">`admin@ecoiz.app / admin123`</p>
+            <>
+              <p className="muted">`admin@ecoiz.app / admin123`</p>
+              <p className="muted">`moderator@ecoiz.app / moderator123`</p>
+            </>
           )}
         </div>
       </div>

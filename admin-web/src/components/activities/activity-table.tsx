@@ -26,12 +26,12 @@ export function ActivityTable({
 
   return (
     <article className="card">
-      <div className="section-head">
+      <div className="section-head section-head-stack">
         <div>
           <h2 className="section-title">Журнал активностей</h2>
         </div>
-        <div className="toolbar">
-          <label className="inline-field">
+        <div className="filter-stack">
+          <label className="inline-field inline-field-search">
             <span className="sr-only">Поиск активностей</span>
             <input
               value={filters.search ?? ""}
@@ -41,25 +41,27 @@ export function ActivityTable({
               placeholder="Поиск по пользователю, названию, заметке или категории"
             />
           </label>
-          <label className="inline-field">
-            <span className="sr-only">Фильтр по категории</span>
-            <select
-              value={filters.category ?? "ALL"}
-              onChange={(event) =>
-                onFilterChange({
-                  ...filters,
-                  category: event.target.value,
-                })
-              }
-            >
-              <option value="ALL">Все</option>
-              {categoryOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="filters-row">
+            <label className="inline-field">
+              <span className="sr-only">Фильтр по категории</span>
+              <select
+                value={filters.category ?? "ALL"}
+                onChange={(event) =>
+                  onFilterChange({
+                    ...filters,
+                    category: event.target.value,
+                  })
+                }
+              >
+                <option value="ALL">Все</option>
+                {categoryOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -86,7 +88,7 @@ export function ActivityTable({
                 <td>{activity.category}</td>
                 <td>{activity.title}</td>
                 <td>{activity.points}</td>
-                <td>{activity.co2Saved.toFixed(1)} kg</td>
+                <td>{activity.co2Saved.toFixed(1)} кг</td>
                 <td>{formatDate(activity.createdAt)}</td>
               </tr>
             ))}

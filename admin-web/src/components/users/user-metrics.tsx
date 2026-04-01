@@ -13,9 +13,9 @@ export function UserMetricsCards({ metrics }: UserMetricsProps) {
       note: "Текущий размер пользовательской базы",
     },
     {
-      label: "Админы",
+      label: "Расширенный доступ",
       value: metrics.adminCount,
-      note: "Пользователи с полным доступом",
+      note: "Админы и модераторы платформы",
     },
     {
       label: "На проверке",
