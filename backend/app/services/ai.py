@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import re
 
 import httpx
 
@@ -12,7 +13,8 @@ from app.models.user import User
 DEFAULT_SYSTEM_PROMPT = """
 Ты EcoIZ AI Eco Assistant, eco-buddy внутри мобильного приложения EcoIZ.
 
-Твоя миссия: помогать пользователю формировать экологичные привычки через короткие советы, мотивацию и персонализированные следующие шаги.
+Твоя миссия: быть для пользователя обычным умным собеседником и eco-buddy одновременно.
+Отвечай как живой ассистент в стиле ChatGPT: сначала пойми смысл реплики и контекст, потом дай уже готовый, естественный ответ.
 
 Роль и стиль:
 - отвечай только на русском;
@@ -29,6 +31,13 @@ DEFAULT_SYSTEM_PROMPT = """
 - по возможности кратко объясняй эффект: меньше отходов, экономия воды/энергии, меньше CO2;
 - учитывай историю действий, серию, очки и релевантные категории, но не пересказывай сырые данные без пользы;
 - если пользователь меняет условия, сразу подстрой ответ под новый контекст.
+- сначала отвечай на настоящий вопрос пользователя, а не на воображаемый eco-шаблон;
+- если вопрос не про экологию напрямую, всё равно отвечай нормально и по-человечески, без попытки насильно свести всё к экопривычкам;
+- если уместно, мягко добавь eco-friendly угол или следующий экологичный шаг, но только когда это реально подходит ситуации;
+- small talk, приветствия, эмоции и обычный разговор тоже обрабатывай естественно;
+- никогда не показывай внутренние рассуждения, план решения, скрытый разбор запроса или служебные заметки;
+- не пиши фразы вроде "пользователь говорит", "нужно подстроить", "сначала посмотрю", "значит нужно";
+- пользователю показывай только финальный дружелюбный ответ.
 
 Нельзя:
 - осуждать пользователя;
@@ -45,7 +54,7 @@ DEFAULT_SYSTEM_PROMPT = """
 
 def _fallback_response(text: str) -> str:
     lowercase = text.lower()
-    if any(word in lowercase for word in ("привет", "здрав", "hello", "hi")):
+    if _is_greeting_or_smalltalk(text):
         return "Привет. Могу помочь с идеями на день, экопривычками или просто нормально ответить на вопрос без шаблонов."
     if "что делать сегодня" in lowercase or "что мне делать сегодня" in lowercase:
         return "На сегодня можно выбрать что-то одно: короткий душ, многоразовую бутылку с собой или выключить лишний свет дома. Этого уже достаточно."
@@ -65,6 +74,36 @@ def _fallback_response(text: str) -> str:
 
 def _contains_any(text: str, *phrases: str) -> bool:
     return any(phrase in text for phrase in phrases)
+
+
+def _normalized_user_text(text: str) -> str:
+    lowered = text.lower().strip()
+    return re.sub(r"(.)\1{2,}", r"\1", lowered)
+
+
+def _is_greeting_or_smalltalk(text: str) -> bool:
+    normalized = _normalized_user_text(text)
+    if any(token in normalized for token in ("прив", "здрав", "hello", "hi", "хай")):
+        return True
+    if "как дела" in normalized or "как ты" in normalized:
+        return True
+    return False
+
+
+def _is_smalltalk_request(text: str) -> bool:
+    normalized = " ".join(_normalized_user_text(text).split())
+    if _is_greeting_or_smalltalk(text):
+        return True
+    smalltalk_phrases = (
+        "что делаешь",
+        "чем занят",
+        "как настроение",
+        "доброе утро",
+        "добрый вечер",
+        "добрый день",
+        "спокойной ночи",
+    )
+    return any(phrase in normalized for phrase in smalltalk_phrases)
 
 
 def _home_actions_for_category(category: str) -> list[str]:
@@ -95,7 +134,7 @@ def _home_actions_for_category(category: str) -> list[str]:
         ]
     if "транспорт" in category_lower:
         return [
-            "если сегодня не выходишь, компенсируй это домашними эко-шагами по воде и энергии",
+            "завтра снова выбрать автобус, метро или пеший отрезок вместо машины",
             "запланируй следующую поездку без машины заранее",
             "если всё же нужно выйти, выбери пеший маршрут хотя бы на короткий отрезок",
         ]
@@ -111,6 +150,45 @@ def _outdoor_actions() -> list[str]:
         "пройтись пешком вместо короткой поездки",
         "многоразовую бутылку или кружку",
         "если хочется, захватить пакет и убрать пару мелких бумажек по пути",
+    ]
+
+
+def _work_actions_for_category(category: str) -> list[str]:
+    category_lower = category.lower()
+    if "вод" in category_lower:
+        return [
+            "наливать воду в кружку или бутылку без одноразового стаканчика",
+            "не оставлять кран открытым в офисной кухне или туалете",
+            "брать ровно столько воды, сколько реально выпьешь",
+        ]
+    if "энерг" in category_lower:
+        return [
+            "перевести ноутбук в энергосбережение",
+            "выключать свет или монитор, когда уходишь надолго",
+            "отключать ненужную зарядку от розетки",
+        ]
+    if "пласт" in category_lower:
+        return [
+            "взять свою кружку или бутылку вместо одноразового стакана",
+            "не брать лишние пластиковые приборы и упаковку на обеде",
+            "держать многоразовую ложку или контейнер на работе",
+        ]
+    if "отход" in category_lower:
+        return [
+            "отдельно собрать бумагу и пластик со стола",
+            "не выбрасывать чистую бумагу в общий мусор",
+            "начать с одного маленького контейнера для сортировки рядом с рабочим местом",
+        ]
+    if "транспорт" in category_lower:
+        return [
+            "доехать до работы на автобусе, метро или пройти часть пути пешком",
+            "на обратной дороге выбрать пеший отрезок вместо короткой поездки",
+            "заранее спланировать маршрут без машины на завтра",
+        ]
+    return [
+        "взять свою кружку вместо одноразового стакана",
+        "перевести ноутбук в энергосбережение",
+        "не брать лишнюю упаковку на обеде",
     ]
 
 
@@ -214,6 +292,21 @@ def _micro_action(category: str) -> str:
     return actions[0]
 
 
+def _natural_next_step(category: str, topic: str | None = None) -> str:
+    category_lower = category.lower()
+    if topic == "outdoor" or "транспорт" in category_lower:
+        return "завтра снова выбрать автобус, метро или короткий пеший отрезок вместо машины"
+    if "вод" in category_lower:
+        return "сделать душ чуть короче или не оставлять кран открытым без дела"
+    if "энерг" in category_lower:
+        return "выключить лишний свет и оставить устройства в энергосбережении"
+    if "пласт" in category_lower:
+        return "взять с собой многоразовую бутылку или сумку"
+    if "отход" in category_lower:
+        return "отсортировать хотя бы часть отходов дома"
+    return _micro_action(category)
+
+
 def _pick_variant(seed_text: str, variants: list[str]) -> str:
     if not variants:
         return ""
@@ -309,6 +402,8 @@ def _context_topic(user: User, text: str) -> str | None:
     combined = " ".join(recent + [current])
     if any(word in combined for word in ("гулять", "погулять", "прогул", "улиц", "выйти")):
         return "outdoor"
+    if any(word in combined for word in ("работ", "офис", "на работе")):
+        return "work"
     if any(word in combined for word in ("дом", "дома")):
         return "home"
     if any(word in combined for word in ("вода", "душ", "кран")):
@@ -331,6 +426,47 @@ def _last_activity_line(snapshot: dict[str, object]) -> str:
     return f"Последнее действие у тебя было в категории «{last_activity.category}»: {last_activity.title.lower()}."
 
 
+def _actions_for_context(category: str, topic: str | None) -> list[str]:
+    if topic == "work":
+        return _work_actions_for_category(category)
+    if topic == "outdoor":
+        walk_actions = _outdoor_actions()
+        return [
+            walk_actions[0],
+            f"взять с собой {walk_actions[1]}",
+            "не покупать по дороге ничего одноразового",
+        ]
+    return _home_actions_for_category(category)
+
+
+def _infer_user_intent(text: str) -> str:
+    lowercase = text.lower()
+    if _is_activity_sharing_message(lowercase):
+        return "praise"
+    if _is_smalltalk_request(text):
+        return "smalltalk"
+    if any(phrase in lowercase for phrase in ("что такое co2", "что такое co₂", "что значит co2", "что значит co₂")):
+        return "explain"
+    if any(phrase in lowercase for phrase in ("мой вклад", "мой прогресс", "как у меня дела", "что у меня по вкладу", "мой результат")):
+        return "progress"
+    if any(
+        phrase in lowercase
+        for phrase in ("проанализируй мои активности", "что видно по моим активностям", "что скажешь по моим активностям", "анализ моих активностей")
+    ):
+        return "analysis"
+    if any(word in lowercase for word in ("мотивац", "не хочу", "лень", "сложно", "устал")):
+        return "motivation"
+    return "advice"
+
+
+def _effective_topic(user: User, text: str) -> str | None:
+    topic = _context_topic(user, text)
+    if topic == "tomorrow":
+        previous_context = _context_topic(user, " ".join(_recent_user_messages(user)))
+        return previous_context or "tomorrow"
+    return topic
+
+
 def _personalized_fallback_response(text: str, user: User) -> str:
     lowercase = text.lower()
     snapshot = _analytics_snapshot(user)
@@ -342,132 +478,69 @@ def _personalized_fallback_response(text: str, user: User) -> str:
     last_activity_line = _last_activity_line(snapshot)
     strongest_line = f"Сильнее всего у тебя сейчас идёт «{strongest_category}»." if strongest_category else ""
     weakest_line = f"Меньше внимания пока получает «{weakest_category}»." if weakest_category else ""
-    topic = _context_topic(user, text)
-    is_short_follow_up = len(lowercase.split()) <= 3
+    raw_topic = _context_topic(user, text)
+    topic = _effective_topic(user, text)
     seed = f"{text}:{user.points}:{user.streak_days}"
     message_category = _message_category(text, suggested_category)
     streak_line = _streak_line(user)
+    intent = _infer_user_intent(text)
+    focus_category = message_category or suggested_category
+    actions = _actions_for_context(focus_category, topic)
+    context_lead = {
+        "work": "Если говорить именно про то, что можно сделать на работе,",
+        "outdoor": "Если отталкиваться от твоего маршрута или прогулки,",
+        "home": "Если отталкиваться от дома,",
+        "tomorrow": "Если смотреть на следующий шаг на завтра,",
+    }.get(topic, "Если смотреть на это практично,")
+    if raw_topic == "tomorrow":
+        context_lead = "Если смотреть на следующий шаг на завтра,"
 
-    if _is_activity_sharing_message(lowercase):
-        suggestion_category = message_category or suggested_category
-        suggestion_actions = _home_actions_for_category(suggestion_category)
+    if intent == "smalltalk":
+        return (
+            f"{_pick_variant(seed, ['Привет 🌱', 'Привет, я на связи 🌿', 'Привет, рад тебя видеть.'])} "
+            f"{_pick_variant(seed, ['У меня всё спокойно, спасибо. Если захочешь, можем поболтать или придумать лёгкий eco-шаг на сегодня.', 'Всё хорошо. Если хочешь, могу просто поболтать или помочь с экологичной идеей без перегруза.', 'Всё ок. Могу и просто пообщаться, и помочь с eco-советом, если понадобится.'])}"
+        )
+
+    if intent == "praise":
         response_parts = [
-            _praise_for_action(text, user, suggestion_category),
+            _praise_for_action(text, user, focus_category),
             streak_line,
-            f"Если хочешь, следующим шагом можно {suggestion_actions[0]}.",
+            f"Если хочешь, следующим шагом можно { _natural_next_step(focus_category, topic) }.",
         ]
         return " ".join(part for part in response_parts if part).strip()
 
-    if _contains_any(lowercase, "нет что", "нет, что", "что-то другое", "что то другое", "другое", "не это", "не такой вариант"):
-        if topic == "outdoor":
-            walk_actions = _outdoor_actions()
-            return (
-                f"Окей, тогда по-другому. Если идёшь гулять, можно просто пройти лишние 10-15 минут пешком, захватить {walk_actions[1]} "
-                f"и по пути ничего одноразового не покупать. Выбери хоть один пункт, этого уже нормально. {_supportive_close(seed)}"
-            )
-        actions = _home_actions_for_category(suggested_category)
+    if intent == "progress":
         return (
-            f"Хорошо, давай без предыдущего варианта. Тогда можно выбрать что-то попроще: {actions[0]}, {actions[1]} "
-            f"или вообще оставить только один маленький шаг на сегодня. {_supportive_close(seed)}"
-        )
-
-    if any(word in lowercase for word in ("привет", "здрав", "hello", "hi")):
-        return (
-            f"{_pick_variant(seed, ['Привет 🌱', 'Привет, я на связи 🌿', 'Привет, давай разберёмся.'])} "
-            f"{_pick_variant(seed, ['Могу подсказать короткий eco-шаг на сегодня по «' + suggested_category + '».', 'Если хочешь, быстро подберу идею на сегодня по «' + suggested_category + '».', 'Могу предложить спокойный следующий шаг по «' + suggested_category + '».'])}"
-        )
-
-    if topic == "outdoor" and any(phrase in lowercase for phrase in ("гулять", "погулять", "выйти", "прогул")):
-        walk_actions = _outdoor_actions()
-        return (
-            f"{_pick_variant(seed, ['Да, прогулка уже подходит.', 'Если идёшь гулять, это уже хороший вариант.', 'Прогулку тоже можно легко превратить в эко-активность.'])} "
-            f"Например: {walk_actions[0]}, захватить {walk_actions[1]} и просто не покупать по дороге ничего одноразового. {_supportive_close(seed)}"
-        )
-
-    if topic == "tomorrow" and is_short_follow_up:
-        if _context_topic(user, " ".join(_recent_user_messages(user))) == "outdoor":
-            walk_actions = _outdoor_actions()
-            return (
-                f"{_pick_variant(seed, ['Завтра можно в том же духе, но ещё легче:', 'На завтра я бы оставил мягкий вариант:', 'Завтра лучше оставить что-то простое:'])} "
-                f"{walk_actions[0]} и просто захватить {walk_actions[1]}. "
-                f"{_pick_variant(seed, ['Не обязательно делать много, важнее сохранить приятный ритм.', 'Лучше легко продолжить, чем перегрузить себя.', 'Здесь главное сохранить хороший ритм, а не делать идеально.'])} {_supportive_close(seed)}"
-            )
-        actions = _home_actions_for_category(suggested_category)
-        return (
-            f"{_pick_variant(seed, ['Завтра можно оставить один простой шаг:', 'На завтра хватит и одного лёгкого шага:', 'Завтра можно выбрать совсем спокойный вариант:'])} {actions[0]}. "
-            f"{_pick_variant(seed, ['Так eco-ритм сохраняется без ощущения перегруза.', 'Так ритм держится очень спокойно.', 'Этого уже достаточно, чтобы не выпадать из ритма.'])}"
-        )
-
-    if any(phrase in lowercase for phrase in ("мой вклад", "мой прогресс", "как у меня дела", "что у меня по вкладу", "мой результат")):
-        return (
-            f"{_pick_variant(seed, ['Если коротко по прогрессу,', 'По результатам сейчас так:', 'Сейчас по твоему вкладу картина такая:'])} "
-            f"у тебя {user.points} очков, серия {user.streak_days} дн. и примерно {user.co2_saved_total:.1f} кг CO₂ экономии. "
-            f"{strongest_line} {weakest_line} {_pick_variant(seed, ['Это уже хороший вклад. Если хочешь, подскажу, куда логичнее двинуться дальше.', 'Планета уже точно заметила такой темп 🌍 Могу сразу предложить следующий шаг без перегруза.', 'Это уже не мелочь. Если надо, подберу следующий шаг под твой темп.'])}"
+            f"Сейчас у тебя {user.points} очков, серия {user.streak_days} дн. и примерно {user.co2_saved_total:.1f} кг CO₂ экономии. "
+            f"{strongest_line} {weakest_line} Если хочешь, я подберу следующий экологичный шаг без перегруза."
         ).strip()
 
-    if any(phrase in lowercase for phrase in ("что мне дальше делать", "что дальше делать", "что делать сегодня", "что можно сделать сегодня", "я сегодня дома", "что можно дома")):
-        actions = _home_actions_for_category(suggested_category)
-        mood_line = f"Я бы сегодня смотрел в сторону «{suggested_category}»." if snapshot["activities_count"] else "Сегодня лучше взять самый лёгкий домашний вариант."
+    if intent == "explain":
         return (
-            f"{mood_line} Можно, например, {actions[0]}, {actions[1]} или {actions[2]}. "
-            f"{_pick_variant(seed, ['Выбери что-то одно, и уже будет хорошо.', 'Не надо всё сразу, одного пункта хватит.', 'Одного такого шага на сегодня уже достаточно.'])} {_category_impact_hint(suggested_category).capitalize()}. {_supportive_close(seed)}"
+            "CO2, или углекислый газ, это один из газов в атмосфере. "
+            "Когда его становится слишком много из-за транспорта, энергии и производства, он усиливает изменение климата. "
+            "Поэтому эко-привычки часто помогают уменьшать выбросы CO2."
         )
 
-    if any(
-        phrase in lowercase
-        for phrase in ("проанализируй мои активности", "что видно по моим активностям", "что скажешь по моим активностям", "анализ моих активностей")
-    ):
+    if intent == "analysis":
         return (
-            f"{_pick_variant(seed, ['Если коротко по твоим активностям,', 'По твоим действиям сейчас видно вот что:', 'Если разбирать твой ритм, получается так:'])} "
-            f"у тебя уже {recent_points} очков за последние 7 дней. "
-            f"{strongest_line} {weakest_line} {last_activity_line} {_pick_variant(seed, ['Это хороший базис. Если хочешь, дальше предложу пару идей именно под твой ритм.', 'Ритм уже есть. Могу сразу подсказать, что логичнее попробовать дальше.', 'Выглядит уверенно. Если надо, подберу следующие шаги без воды.'])}"
+            f"Если коротко по твоим активностям, за последние 7 дней у тебя уже {recent_points} очков. "
+            f"{strongest_line} {weakest_line} {last_activity_line} "
+            f"Логичнее всего сейчас дать чуть больше внимания категории «{focus_category}»."
         ).strip()
 
-    if "вод" in lowercase:
-        tail = "Это особенно полезно, если хочешь быстро добавить спокойную домашнюю активность сегодня."
-        if strongest_category == "Вода":
-            tail = "Вода у тебя уже идёт хорошо, так что здесь важнее держать ритм."
-        return (
-            f"{_pick_variant(seed, ['Для воды я бы начал с двух вещей:', 'По воде сейчас самый понятный вариант такой:', 'Если брать воду, можно начать вот с этого:'])} сократи душ на пару минут и не оставляй кран открытым без надобности. "
-            + f" Это помогает экономить воду и ресурсы. {tail}"
-        )
-
-    if any(word in lowercase for word in ("энерг", "свет", "электр")):
-        return (
-            f"{_pick_variant(seed, ['Если ты дома, самый быстрый шаг:', 'По энергии самый лёгкий вход такой:', 'Если хочется простой вариант по энергии, то вот он:'])} выключи лишний свет и зарядки в пустых комнатах. "
-            f"{_pick_variant(seed, ['Потом переведи устройства в энергосбережение, это простой и понятный вклад без лишних усилий.', 'Потом можно включить энергосбережение на устройствах, это даёт спокойный и понятный эффект.', 'А дальше просто оставь устройства в энергосбережении, это лёгкий и полезный шаг.'])} Так ты сэкономишь немного энергии без напряга."
-        )
-
-    if any(word in lowercase for word in ("пластик", "упаков", "бутыл", "пакет")):
-        return (
-            f"{_pick_variant(seed, ['На сегодня хороший шаг без пластика такой:', 'Если брать пластик, я бы выбрал вот это:', 'По пластику самый жизненный вариант сейчас:'])} использовать одну многоразовую бутылку или кружку и не брать лишний пакет. "
-            f"{_pick_variant(seed, ['Это небольшой шаг, но он хорошо усиливает регулярность и вклад.', 'Шаг маленький, но для ритма он очень рабочий.', 'Выглядит просто, но именно такие вещи хорошо закрепляются.'])} Так отходов станет чуть меньше."
-        )
-
-    if any(word in lowercase for word in ("отход", "мусор", "сортир", "переработ")):
-        return (
-            f"{_pick_variant(seed, ['Если хочешь полезный шаг прямо сегодня,', 'По отходам можно начать очень приземлённо:', 'Тут лучше всего работает простой вариант:'])} начни с сортировки того, что уже есть дома: бумага, пластик, смешанные отходы. "
-            f"{_pick_variant(seed, ['Это даёт понятный результат и хорошо дополняет другие привычки.', 'Такой шаг сразу ощущается как что-то реальное.', 'Это спокойный и очень понятный формат действия.'])} Так меньше отходов уходит впустую."
-        )
-
-    if any(word in lowercase for word in ("мотивац", "не хочу", "лень", "сложно")):
-        focus = weakest_category or suggested_category
+    if intent == "motivation":
         return (
             f"{_pick_variant(seed, ['Не тащи всё сразу.', 'Лучше не перегружать себя.', 'Тут не нужно делать много.'])} "
-            f"Выбери одну простую вещь, например { _micro_action(focus) }, и закрой её спокойно за 5 минут. "
-            f"{_pick_variant(seed, ['В EcoIZ правда лучше работает ритм, а не идеальность.', 'Здесь важнее ритм, чем идеальный результат.', 'Лучше маленький реальный шаг, чем большой план без сил.'])}"
-        )
-
-    if any(word in lowercase for word in ("как", "почему", "зачем", "что")):
-        return (
-            f"{_pick_variant(seed, ['Если коротко:', 'По сути:', 'Если по-простому:'])} сейчас логичнее всего дать чуть больше внимания категории «{suggested_category}». "
-            f"Но лучше не распыляться: выбери один понятный шаг и на нём остановись."
+            f"Попробуй один микро-шаг: {actions[0]}. "
+            f"{_pick_variant(seed, ['Этого уже достаточно, чтобы не выпадать из ритма.', 'Один спокойный шаг тоже считается вкладом.', 'Лучше маленький реальный шаг, чем большой план без сил.'])}"
         )
 
     return (
-        f"Сейчас логичнее всего попробовать что-то из категории «{suggested_category}». "
-        f"{last_activity_line} {_pick_variant(seed, ['Если хочешь, подберу варианты под дом, прогулку, воду, энергию или пластик.', 'Могу быстро предложить варианты под твой день: дома, на прогулке или по конкретной категории.', 'Если надо, сразу дам несколько вариантов под твою ситуацию.'])}"
-    )
+        f"{context_lead} логичнее всего сейчас сфокусироваться на категории «{focus_category}». "
+        f"Например: {actions[0]}, {actions[1]} или {actions[2]}. "
+        f"{_category_impact_hint(focus_category).capitalize()}. {_supportive_close(seed)}"
+    ).strip()
 
 
 def _is_too_generic_response(text: str) -> bool:
@@ -476,12 +549,12 @@ def _is_too_generic_response(text: str) -> bool:
         "если коротко: начни с самого простого практического шага",
         "если хочешь, уточни вопрос, и я отвечу точнее",
         "напиши вопрос чуть точнее",
+        "по сути: сейчас логичнее всего дать чуть больше внимания категории",
     ]
     return any(marker in normalized for marker in generic_markers)
 
 
 def _is_low_quality_model_response(user_text: str, response_text: str) -> bool:
-    normalized_user = " ".join(user_text.lower().split())
     normalized_response = " ".join(response_text.lower().split())
 
     awkward_markers = [
@@ -494,36 +567,37 @@ def _is_low_quality_model_response(user_text: str, response_text: str) -> bool:
         "судя по твоим активностям",
         "если смотреть на твои действия",
         "если опираться на твой ритм",
+        "перетянутый бутылок",
+        "чашку чай",
+        "за кухонь",
+        "пользователь говорит",
+        "нужно подстроить",
+        "сначала посмотрю",
+        "он говорит, что",
+        "значит, нужно",
+        "его данные:",
+        "lastactivitydate",
+        "streakdays:",
+        "recordedactivities",
+        "currentstreakdays",
+        "strongestcategory",
+        "weakestcategory",
+        "topcategories",
+        "последние активности:",
+        "completedchallenges",
+        "pendingchallengeclaims",
+        "recentcategorycoverage",
+        "основной состав атмосферы",
     ]
     if any(marker in normalized_response for marker in awkward_markers):
         return True
 
-    if len(normalized_user.split()) <= 4 and len(normalized_response.split()) > 45:
+    if len(normalized_response.split()) > 160:
         return True
 
-    if _contains_any(normalized_user, "нет что", "что-то другое", "что то другое", "другое", "не это"):
-        if not _contains_any(
-            normalized_response,
-            "друг",
-            "тогда",
-            "окей",
-            "хорошо",
-            "можно",
-            "вместо",
-        ):
-            return True
-
-    if _contains_any(normalized_user, "гулять", "погулять", "иду гулять", "выйти"):
-        if not _contains_any(
-            normalized_response,
-            "гуля",
-            "пеш",
-            "пройти",
-            "прогул",
-            "бутыл",
-            "однораз",
-        ):
-            return True
+    # Reject answers that are clearly empty or useless.
+    if len(normalized_response.split()) < 3:
+        return True
 
     return False
 
@@ -538,157 +612,46 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _activities_summary(user: User, limit: int) -> str:
+def _compact_activity_highlights(user: User, limit: int = 3) -> str:
     activities = sorted(user.activities, key=lambda item: _as_utc(item.created_at), reverse=True)[:limit]
     if not activities:
-        return "Нет записанных активностей."
-    return "\n".join(
-        f"- {_fmt_dt(item.created_at)} | {item.title} | категория: {item.category} | "
-        f"баллы: {item.points} | co2Saved: {item.co2_saved}"
+        return "нет записанных активностей"
+    return "; ".join(
+        f"{item.title} ({item.category}, {item.co2_saved:.2f} CO2, {_fmt_dt(item.created_at)})"
         for item in activities
     )
 
 
-def _challenges_summary(user: User, limit: int) -> str:
-    items = sorted(
-        user.user_challenges,
-        key=lambda item: (item.is_completed, item.challenge.title),
-    )[:limit]
+def _compact_challenge_highlights(user: User, limit: int = 3) -> str:
+    items = sorted(user.user_challenges, key=lambda item: (item.is_completed, item.challenge.title), reverse=True)[:limit]
     if not items:
-        return "Нет челленджей."
-    lines: list[str] = []
-    for item in items:
-        status = "completed" if item.is_completed else "active"
-        lines.append(
-            f"- {item.challenge.title} | {item.current_count}/{item.challenge.target_count} | "
-            f"status: {status} | reward: {item.challenge.reward_points}"
-        )
-    return "\n".join(lines)
-
-
-def _posts_summary(user: User, limit: int) -> str:
-    posts = sorted(user.posts, key=lambda item: _as_utc(item.created_at), reverse=True)[:limit]
-    if not posts:
-        return "Нет постов."
-    return "\n".join(
-        f"- {_fmt_dt(item.created_at)} | {item.text[:120]}"
-        for item in posts
+        return "нет активных челленджей"
+    return "; ".join(
+        f"{item.challenge.title} ({item.current_count}/{item.challenge.target_count}, {'completed' if item.is_completed else 'active'})"
+        for item in items
     )
 
 
-def _user_analytics_summary(user: User) -> str:
-    activities = sorted(user.activities, key=lambda item: _as_utc(item.created_at))
-    if not activities:
-        return (
-            "- recordedActivities: 0\n"
-            "- adviceMode: onboarding\n"
-            "- focus: начать с 1-2 простых действий и сформировать первую серию"
-        )
-
-    now = datetime.now(timezone.utc)
-    last_7_days = now - timedelta(days=7)
-    last_30_days = now - timedelta(days=30)
-
-    category_counts: dict[str, int] = defaultdict(int)
-    category_points: dict[str, int] = defaultdict(int)
-    category_co2: dict[str, float] = defaultdict(float)
-    active_days: set[datetime.date] = set()
-    last_week_points = 0
-    last_month_points = 0
-    last_week_co2 = 0.0
-
-    for item in activities:
-        created_at = _as_utc(item.created_at)
-        category_counts[item.category] += 1
-        category_points[item.category] += item.points
-        category_co2[item.category] += item.co2_saved
-        active_days.add(created_at.date())
-        if created_at >= last_7_days:
-            last_week_points += item.points
-            last_week_co2 += item.co2_saved
-        if created_at >= last_30_days:
-            last_month_points += item.points
-
-    strongest_category = max(category_counts.items(), key=lambda value: (value[1], category_points[value[0]]))[0]
-    weakest_category = min(category_counts.items(), key=lambda value: (value[1], category_points[value[0]]))[0]
-    avg_points_per_activity = user.points / max(len(activities), 1)
-    avg_co2_per_activity = user.co2_saved_total / max(len(activities), 1)
-    recent_categories = [item.category for item in activities if _as_utc(item.created_at) >= last_7_days]
-    unique_recent_categories = sorted(set(recent_categories))
-    consistency = round(len(active_days) / max((activities[-1].created_at.date() - activities[0].created_at.date()).days + 1, 1), 2)
-
-    top_categories = sorted(
-        category_counts.items(),
-        key=lambda value: (-value[1], -category_points[value[0]], value[0]),
-    )[:3]
-    top_categories_text = ", ".join(
-        f"{name}: {count} активн., {category_points[name]} очк., {category_co2[name]:.2f} CO2"
-        for name, count in top_categories
-    )
-
-    return "\n".join(
-        [
-            f"- recordedActivities: {len(activities)}",
-            f"- activeDays: {len(active_days)}",
-            f"- currentStreakDays: {user.streak_days}",
-            f"- totalPoints: {user.points}",
-            f"- totalCo2Saved: {user.co2_saved_total:.2f}",
-            f"- pointsLast7Days: {last_week_points}",
-            f"- pointsLast30Days: {last_month_points}",
-            f"- co2Last7Days: {last_week_co2:.2f}",
-            f"- avgPointsPerActivity: {avg_points_per_activity:.1f}",
-            f"- avgCo2PerActivity: {avg_co2_per_activity:.2f}",
-            f"- strongestCategory: {strongest_category}",
-            f"- weakestCategory: {weakest_category}",
-            f"- recentCategoryCoverage: {', '.join(unique_recent_categories) if unique_recent_categories else 'нет'}",
-            f"- consistencyIndex: {consistency}",
-            f"- topCategories: {top_categories_text}",
-        ]
-    )
-
-
-def _user_impact_summary(user: User) -> str:
-    claimed = sum(1 for item in user.user_challenges if item.claimed_at is not None)
-    completed = sum(1 for item in user.user_challenges if item.is_completed)
-    pending_claim = max(completed - claimed, 0)
-    last_activity = max(user.activities, key=lambda item: _as_utc(item.created_at), default=None)
-    return "\n".join(
-        [
-            f"- completedChallenges: {completed}",
-            f"- claimedChallenges: {claimed}",
-            f"- pendingChallengeClaims: {pending_claim}",
-            f"- postsCreated: {len(user.posts)}",
-            f"- lastActivityDate: {_fmt_dt(last_activity.created_at) if last_activity else 'нет'}",
-            f"- contributionSummary: {user.co2_saved_total:.2f} CO2 saved and {user.points} points earned",
-        ]
-    )
+def _compact_profile_summary(user: User) -> str:
+    pieces = [
+        f"{user.points} очков",
+        f"серия {user.streak_days} дн.",
+        f"{user.co2_saved_total:.2f} кг CO2 сохранено",
+    ]
+    return ", ".join(pieces)
 
 
 def _build_prompt(user: User, text: str) -> str:
     display_name = user.full_name.strip() or user.username
     return f"""
-Пользователь:
+Пользователь EcoIZ:
 - name: {display_name}
-- username: {user.username}
-- points: {user.points}
-- streakDays: {user.streak_days}
-- co2SavedTotal: {user.co2_saved_total}
+- profile: {_compact_profile_summary(user)}
+- recentActivities: {_compact_activity_highlights(user)}
+- challengeFocus: {_compact_challenge_highlights(user)}
 
-Последние активности:
-{_activities_summary(user, 6)}
-
-Челленджи:
-{_challenges_summary(user, 5)}
-
-Последние посты:
-{_posts_summary(user, 3)}
-
-Аналитика пользователя:
-{_user_analytics_summary(user)}
-
-Вклад пользователя:
-{_user_impact_summary(user)}
-""".strip() + f"\n\nСообщение пользователя:\n{text.strip()}"
+Используй этот контекст мягко и выборочно.
+""".strip() + f"\n\nТекущая реплика пользователя:\n{text.strip()}"
 
 
 def _conversation_messages(user: User, text: str, history_limit: int) -> list[dict[str, str]]:
@@ -697,9 +660,9 @@ def _conversation_messages(user: User, text: str, history_limit: int) -> list[di
         {
             "role": "system",
             "content": (
-                "Ниже контекст пользователя EcoIZ. Используй его только как вспомогательный персональный контекст. "
-                "Не перечисляй всё подряд, если это не помогает ответу. Если пользователь спрашивает совет, "
-                "опирайся на реальные категории, активность, серию, вклад и слабые места пользователя.\n\n"
+                "Ниже контекст пользователя EcoIZ. Это не шаблон ответа и не чеклист. "
+                "Используй его мягко и выборочно, только когда он помогает ответить умнее и естественнее. "
+                "Не пересказывай весь контекст и не делай сухой анализ без запроса.\n\n"
                 f"{_build_prompt(user, text)}"
             ),
         },
@@ -766,6 +729,22 @@ def _openai_response(messages: list[dict[str, str]]) -> str | None:
     return content or None
 
 
+def _normalize_model_response(text: str) -> str:
+    normalized = text.strip()
+    prefixes = (
+        "ecoiz ai:",
+        "ecoiz assistant:",
+        "ассистент:",
+        "ответ:",
+    )
+    lower = normalized.lower()
+    for prefix in prefixes:
+        if lower.startswith(prefix):
+            normalized = normalized[len(prefix):].strip()
+            lower = normalized.lower()
+    return normalized
+
+
 def ai_response(text: str, *, user: User | None = None) -> str:
     settings = get_settings()
     if user is None:
@@ -774,16 +753,20 @@ def ai_response(text: str, *, user: User | None = None) -> str:
     messages = _conversation_messages(user, text, settings.ai_history_limit)
     personalized_fallback = _personalized_fallback_response(text, user)
 
-    if settings.ai_provider == "openrouter" and not settings.openrouter_api_key:
-        return personalized_fallback
-    if settings.ai_provider == "openai" and not settings.openai_api_key:
+    provider = settings.ai_provider
+    if provider == "openrouter" and not settings.openrouter_api_key:
+        provider = "openai" if settings.openai_api_key else "fallback"
+    if provider == "openai" and not settings.openai_api_key:
+        provider = "openrouter" if settings.openrouter_api_key else "fallback"
+    if provider == "fallback":
         return personalized_fallback
 
     try:
-        if settings.ai_provider == "openai":
+        if provider == "openai":
             content = _openai_response(messages)
         else:
             content = _openrouter_response(messages)
+        content = _normalize_model_response(content or "")
         if not content or _is_too_generic_response(content) or _is_low_quality_model_response(text, content):
             return personalized_fallback
         return content

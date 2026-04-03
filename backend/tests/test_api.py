@@ -180,6 +180,110 @@ class BackendAPITests(unittest.TestCase):
         self.assertTrue(any(word in assistant_text for word in ("co2", "выброс", "транспорт")))
         self.assertTrue(any(word in assistant_text for word in ("следующим шагом", "если хочешь", "можно")))
 
+    def test_chat_suggests_work_friendly_actions_for_office_context(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        first = self.client.post(
+            "/chat/messages",
+            json={"text": "А на работе что можно сделать?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(first.status_code, 201)
+        first_text = first.json()["messages"][1]["text"].lower()
+        self.assertTrue(any(word in first_text for word in ("на работе", "для работы", "рабочий")))
+        self.assertTrue(any(word in first_text for word in ("кружк", "бутыл", "ноутбук", "энергосбереж", "упаков")))
+
+        second = self.client.post(
+            "/chat/messages",
+            json={"text": "А как я сделаю на работе? Давай то, что я смогу на работе сделать"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(second.status_code, 201)
+        second_text = second.json()["messages"][1]["text"].lower()
+        self.assertTrue(any(word in second_text for word in ("на работе", "для работы", "рабочий")))
+        self.assertNotIn("по сути: сейчас логичнее всего", second_text)
+
+    def test_chat_handles_smalltalk_without_forcing_eco_advice(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        chat = self.client.post(
+            "/chat/messages",
+            json={"text": "Привееет как дела"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(chat.status_code, 201)
+        assistant_text = chat.json()["messages"][1]["text"].lower()
+        self.assertIn("привет", assistant_text)
+        self.assertFalse("вода" in assistant_text and "категори" in assistant_text)
+
+    def test_chat_handles_how_are_you_like_normal_conversation(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        chat = self.client.post(
+            "/chat/messages",
+            json={"text": "Привееет как дела"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(chat.status_code, 201)
+        assistant_text = chat.json()["messages"][1]["text"].lower()
+        self.assertTrue(any(word in assistant_text for word in ("привет", "хорош", "спокой", "поболт", "пообщ")))
+        self.assertNotIn("логичнее всего", assistant_text)
+
+    def test_chat_never_leaks_internal_reasoning_style_text(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        chat = self.client.post(
+            "/chat/messages",
+            json={"text": "Но я сегодня пойду гулять"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(chat.status_code, 201)
+        assistant_text = chat.json()["messages"][1]["text"].lower()
+        self.assertNotIn("пользователь говорит", assistant_text)
+        self.assertNotIn("нужно подстроить", assistant_text)
+        self.assertNotIn("сначала посмотрю", assistant_text)
+        self.assertNotIn("его данные", assistant_text)
+
+    def test_chat_explains_co2_without_dumping_raw_analytics(self) -> None:
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "user@ecoiz.app", "password": "password123"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["token"]
+
+        chat = self.client.post(
+            "/chat/messages",
+            json={"text": "А что такое co2?"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(chat.status_code, 201)
+        assistant_text = chat.json()["messages"][1]["text"].lower()
+        self.assertTrue(any(word in assistant_text for word in ("co2", "углекисл", "газ", "выброс")))
+        self.assertNotIn("strongestcategory", assistant_text)
+        self.assertNotIn("weakestcategory", assistant_text)
+        self.assertNotIn("последние активности:", assistant_text)
+
     def test_error_responses(self) -> None:
         unauthorized = self.client.get(
             "/bootstrap",
