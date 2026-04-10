@@ -987,23 +987,23 @@ tbody tr:hover {
 }
 
 .habit-row-transport {
-  background: rgba(255, 184, 77, 0.13);
+  background: rgba(255, 157, 31, 0.13);
 }
 
 .habit-row-water {
-  background: rgba(87, 184, 255, 0.13);
+  background: rgba(45, 169, 245, 0.13);
 }
 
 .habit-row-waste {
-  background: rgba(126, 227, 93, 0.14);
+  background: rgba(105, 216, 90, 0.14);
 }
 
 .habit-row-plastic {
-  background: rgba(68, 224, 208, 0.14);
+  background: rgba(32, 216, 195, 0.14);
 }
 
 .habit-row-energy {
-  background: rgba(255, 216, 77, 0.16);
+  background: rgba(242, 191, 24, 0.16);
 }
 
 .category-color-chip {
@@ -1016,33 +1016,33 @@ tbody tr:hover {
 }
 
 .category-color-transport {
-  background: rgba(255, 184, 77, 0.16);
-  color: #d88918;
-  border-color: rgba(255, 184, 77, 0.3);
+  background: rgba(255, 157, 31, 0.16);
+  color: #ff9d1f;
+  border-color: rgba(255, 157, 31, 0.3);
 }
 
 .category-color-water {
-  background: rgba(87, 184, 255, 0.16);
-  color: #2489df;
-  border-color: rgba(87, 184, 255, 0.3);
+  background: rgba(45, 169, 245, 0.16);
+  color: #2da9f5;
+  border-color: rgba(45, 169, 245, 0.3);
 }
 
 .category-color-plastic {
-  background: rgba(68, 224, 208, 0.16);
-  color: #18a99d;
-  border-color: rgba(68, 224, 208, 0.3);
+  background: rgba(32, 216, 195, 0.16);
+  color: #20d8c3;
+  border-color: rgba(32, 216, 195, 0.3);
 }
 
 .category-color-waste {
-  background: rgba(126, 227, 93, 0.16);
-  color: #52a93b;
-  border-color: rgba(126, 227, 93, 0.3);
+  background: rgba(105, 216, 90, 0.16);
+  color: #69d85a;
+  border-color: rgba(105, 216, 90, 0.3);
 }
 
 .category-color-energy {
-  background: rgba(255, 216, 77, 0.18);
-  color: #c99a08;
-  border-color: rgba(255, 216, 77, 0.3);
+  background: rgba(242, 191, 24, 0.18);
+  color: #f2bf18;
+  border-color: rgba(242, 191, 24, 0.3);
 }
 
 .sr-only {

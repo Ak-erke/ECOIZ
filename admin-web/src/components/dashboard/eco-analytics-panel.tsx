@@ -7,11 +7,11 @@ type EcoAnalyticsPanelProps = {
 };
 
 const categoryPalette: Record<string, { tone: string; accent: string }> = {
-  "Транспорт": { tone: "#FFE7CB", accent: "#D97C18" },
-  "Вода": { tone: "#D9F0FF", accent: "#2E97E6" },
-  "Пластик": { tone: "#D8F7F2", accent: "#26B9B0" },
-  "Отходы": { tone: "#E3F8D9", accent: "#55B83D" },
-  "Энергия": { tone: "#FFF0BF", accent: "#D8A10D" },
+  "Транспорт": { tone: "#FFE7CB", accent: "#FF9D1F" },
+  "Вода": { tone: "#D9F0FF", accent: "#2DA9F5" },
+  "Пластик": { tone: "#D8F7F2", accent: "#20D8C3" },
+  "Отходы": { tone: "#E3F8D9", accent: "#69D85A" },
+  "Энергия": { tone: "#FFF0BF", accent: "#F2BF18" },
 };
 
 export function EcoAnalyticsPanel({ analytics }: EcoAnalyticsPanelProps) {
